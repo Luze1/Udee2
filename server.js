@@ -989,7 +989,6 @@ app.get("/search-history", (req, res) => {
   });
 });
 
-// Route: Tenant view self history (Using session tenantID)
 app.get("/tenant-history", (req, res) => {
   const tenantID = req.session.user?.id; // Get tenantID from session
 
@@ -999,10 +998,11 @@ app.get("/tenant-history", (req, res) => {
 
   const tenantQuery = `SELECT * FROM tenant WHERE tenant_ID = ?;`
   const historyQuery = 
-      `SELECT bill.*, payment.bill_status 
-      FROM bill 
-      LEFT JOIN payment ON bill.bill_id = payment.bill_id
-      WHERE bill.room_id IN (SELECT room_id FROM room WHERE tenant_ID = ?)
+      `SELECT bill.*, 
+              payment.bill_status 
+       FROM bill 
+       LEFT JOIN payment ON bill.bill_id = payment.bill_id
+       WHERE bill.room_id IN (SELECT room_id FROM room WHERE tenant_ID = ?)
   ;`
 
   db.get(tenantQuery, [tenantID], (err, tenant) => {
@@ -1011,8 +1011,33 @@ app.get("/tenant-history", (req, res) => {
 
     db.all(historyQuery, [tenantID], (err, history) => {
       if (err) return res.send("Error fetching rental history.");
-      res.render("history", { tenant, history , user: req.session.user});
-    });
+    
+      console.log("History Data:", history); // ตรวจสอบข้อมูลทั้งหมด
+    
+      history.forEach(record => {
+        console.log("Bill Status:", record.bill_status); // ตรวจสอบค่า bill_status
+        
+        if (record.bill_status === "0") {
+          record.status_text = "❌ ค้างชำระ";
+        } else if (record.bill_status === "1") {
+          record.status_text = "✅ ชำระแล้ว";
+        } else if (record.bill_status === "2") {
+          record.status_text = "⏳ กำลังดำเนินการ";
+        } else {
+          record.status_text = "❓ ไม่ทราบสถานะ";
+        }
+      });
+    
+      res.render("history", { tenant, history, user: req.session.user });
+    });    
+  });
+});
+
+// Route:Owner Logout
+app.get('/logoutOwner', (req, res) => {
+  req.session.destroy(() => {
+
+    res.redirect('/owner');
   });
 });
 
