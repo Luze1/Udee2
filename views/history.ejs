@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant History</title>
+</head>
+<body>
+    <h2>Welcome, <%= tenant.firstName %> <%= tenant.lastName %></h2>
+    <p>Email: <%= tenant.email %></p>
+    <p>Phone: <%= tenant.telephone %></p>
+    <h3>Rental History</h3>
+    <table border="1">
+        <tr>
+            <th>Room</th>
+            <th>Month</th>
+            <th>Rent Fee</th>
+            <th>Water Bill</th>
+            <th>Electricity Bill</th>
+            <th>Other Charges</th>
+            <th>Status</th>
+        </tr>
+        <% history.forEach(record => { %>
+        <tr>
+            <td><%= record.room_id %></td>
+            <td><%= record.month %></td>
+            <td><%= record.rent_fee %></td>
+            <td><%= record.water_bill %></td>
+            <td><%= record.electricity_bill %></td>
+            <td><%= record.additional_expenses %></td>
+            <td><%= record.status %></td>
+        </tr>
+        <% }); %>
+    </table>
+</body>
+</html>

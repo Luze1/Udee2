@@ -13,6 +13,68 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/style/navOwner.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+
+
+        h2 {
+            color: #333;
+            font-weight: bold;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+
+        td {
+            background-color: #f9f9f9;
+        }
+    </style>
 </head>
 
 <body>
@@ -20,7 +82,8 @@
 
     <!-- Main Content -->
     <div id="main-content">
-        <h2>Search Tenant History</h2>
+        <div class="container text-center pt-2 mt-5">
+            <h2>Search Tenant History</h2>
         <form action="/search-history" method="GET">
             <input type="text" name="query" placeholder="Enter Username, Email, or Full Name" required>
             <button type="submit">Search</button>
@@ -31,7 +94,7 @@
             <p>Email: <%= tenant.email %></p>
             <p>Phone: <%= tenant.telephone %></p>
             <h3>Rental History</h3>
-            <table border="1">
+            <table border="1" class="table table-striped">
                 <tr>
                     <th>Room</th>
                     <th>Month</th>
@@ -54,6 +117,7 @@
                 <% }); %>
             </table>
         <% } %>
+        </div>
     </div>
 
     <!-- GSAP -->

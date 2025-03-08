@@ -304,36 +304,35 @@ app.post("/register", (req, res) => {
 
 app.get("/banks/:bill_id", (req, res) => {
   if (!req.session.user) {
-    return res.redirect("/"); // ถ้าไม่ได้ login ให้กลับไปหน้าแรก
+      return res.redirect("/");
   }
 
   const billId = req.params.bill_id;
   const query = `SELECT bank_account_number, bank_account_name, bank_name, bank_pic FROM bank`;
 
   db.all(query, [], (err, banks) => {
-    if (err) {
-      console.error("SQL Error:", err.message);
-      return res.status(500).send("เกิดข้อผิดพลาดในการดึงข้อมูลธนาคาร");
-    }
-
-    // ✅ แปลง `BLOB` เป็น `Base64` (ถ้ามีค่า)
-    const formattedBanks = banks.map(bank => {
-      let bankPicBase64 = "";
-      if (bank.bank_pic) {
-        bankPicBase64 = `data:image/png;base64,${bank.bank_pic.toString("base64")}`;
-      } else {
-        bankPicBase64 = "/default-bank-logo.png"; // รูป Default ถ้าไม่มีค่า
+      if (err) {
+          console.error("SQL Error:", err.message);
+          return res.status(500).send("เกิดข้อผิดพลาดในการดึงข้อมูลธนาคาร");
       }
 
-      return {
-        bank_account_number: bank.bank_account_number,
-        bank_account_name: bank.bank_account_name,
-        bank_name: bank.bank_name,
-        bank_pic: bankPicBase64
-      };
+      const formattedBanks = banks.map(bank => {
+        console.log("Raw bank_pic from DB:", bank.bank_pic);
+        
+        let bankPic = "/assets/default-bank.png"; // ค่า default
+        if (bank.bank_pic && bank.bank_pic.trim() !== "") {
+            bankPic = bank.bank_pic.startsWith("/") ? bank.bank_pic : `/assets/${bank.bank_pic}`;
+        }
+        
+        console.log("Processed bank_pic:", bankPic);
+        return {
+            bank_account_number: bank.bank_account_number,
+            bank_account_name: bank.bank_account_name,
+            bank_name: bank.bank_name,
+            bank_pic: bankPic
+        };
     });
-
-    res.render("select_bank", { user: req.session.user, banks: formattedBanks, bill_id: billId });
+      res.render("select_bank", { user: req.session.user, banks: formattedBanks, bill_id: billId });
   });
 });
 
@@ -356,8 +355,8 @@ app.get("/pay/:bank_account_number/:bill_id", (req, res) => {
       return res.status(404).send("ไม่พบบัญชีธนาคาร");
     }
 
-    // แปลง `BLOB` เป็น `Base64`
-    const bankPic = bank.bank_pic ? `data:image/png;base64,${bank.bank_pic.toString("base64")}` : "/default-bank-logo.png";
+    // ใช้ path ของรูปภาพตรงๆ
+    const bankPic = bank.bank_pic && bank.bank_pic.trim() !== "" ? bank.bank_pic : "/assets/default-bank.png";
 
     res.render("payment", { user: req.session.user, bank: { ...bank, bank_pic: bankPic }, bill_id });
   });
@@ -505,11 +504,15 @@ app.get('/tncontact', (req, res) => {
   console.log(req.session.user.username);
   const tenantID = req.session.user.id;
   
-  const query = `SELECT c.contact_id, c.tenant_ID, c.topic, c.description, c.picture, c.date, c.status, c.response, c.date, d.dormitory_name
-  FROM contact c JOIN tenant t ON c.tenant_ID = t.tenant_ID
-  JOIN room r ON t.tenant_ID = r.tenant_ID
-  JOIN dormitory d ON r.dormitory_id = d.dormitory_id
-  WHERE c.tenant_ID = ?`;  // แสดงเฉพาะ tenant_ID ที่ล็อกอิน
+  const query = `SELECT c.contact_id, c.tenant_ID, c.topic, c.description, c.picture, c.date, 
+       c.status, c.response, c.date, d.dormitory_name
+      FROM contact c 
+      JOIN tenant t ON c.tenant_ID = t.tenant_ID
+      JOIN room r ON t.tenant_ID = r.tenant_ID
+      JOIN dormitory d ON r.dormitory_id = d.dormitory_id
+      WHERE c.tenant_ID = ?
+      GROUP BY c.contact_id
+      ORDER BY c.date DESC;`;  // แสดงเฉพาะ tenant_ID ที่ล็อกอิน
   
 
   db.all(query, [tenantID], (err, rows) => {
@@ -527,7 +530,8 @@ app.get('/ownercontact', (req, res) => {
     JOIN tenant t ON c.tenant_ID = t.tenant_ID
     JOIN room r ON t.tenant_ID = r.tenant_ID
     JOIN dormitory d ON r.dormitory_id = d.dormitory_id
-    ORDER BY c.date DESC`;
+    GROUP BY c.contact_id
+    ORDER BY c.date DESC;`;
 
   db.all(query, [], (err, rows) => {
       if (err) {
@@ -535,7 +539,7 @@ app.get('/ownercontact', (req, res) => {
       }
 
       // เรนเดอร์หน้า EJS และส่งข้อมูลไป
-      res.render('ownercontact', { contacts: rows });
+      res.render('ownercontact', { contacts: rows , owner:req.session.owner});
   });
 });
 
@@ -567,9 +571,9 @@ WHERE c.contact_id = ?`;
       }
 
       if (row.status === 'pending') {
-          res.render('ownercontactdetail', { contact: row });
+          res.render('ownercontactdetail', { contact: row , owner:req.session.owner, user:req.session.user});
       } else {
-          res.render('contactdone', { contact: row });
+          res.render('contactdone_owner', { contact: row , owner:req.session.owner, user:req.session.user});
       }
 
   });
@@ -598,9 +602,37 @@ WHERE c.contact_id = ?`;
       if (row.status === 'pending') {
           res.render('tenantcontactdetail', { contact: row });
       } else {
-          res.render('contactdone', { contact: row });
+          res.render('contactdone_user', { contact: row ,user:req.session.user});
       }
 
+  });
+});
+
+app.get('/owncontact/:id', (req, res) => {
+  const contactId = req.params.id;
+  const query = `SELECT c.contact_id, c.tenant_ID, c.topic, c.description, c.picture, c.date, c.status, c.response, c.response_time, t.tenant_ID, t.firstName, t.lastName, t.telephone, r.room_id, d.dormitory_id, d.dormitory_name, d.owner_id
+FROM contact c
+JOIN tenant t ON c.tenant_ID = t.tenant_ID
+JOIN room r ON t.tenant_ID = r.tenant_ID
+JOIN dormitory d ON r.dormitory_id = d.dormitory_id
+WHERE c.contact_id = ?`;
+
+  db.get(query, [contactId], (err, row) => {
+      if (err) {
+          return res.status(500).send('Database error: ' + err.message);
+      }
+      if (!row) {
+          return res.status(404).send('Contact not found');
+      }
+      if (row.picture) {
+          row.picture = `data:image/jpeg;base64,${row.picture.toString('base64')}`;
+      }
+
+      if (row.status === 'pending') {
+          res.render('tenantcontactdetail', { contact: row });
+      } else {
+          res.render('contactdone_owner', { contact: row , owner:req.session.owner, user:req.session.user});
+      }
   });
 });
 
@@ -674,7 +706,7 @@ app.get('/add_bill', (req, res) => {
 
 // Route for the add_dorm page
 app.get('/add_dorm', (req, res) => {
-  res.render('add_dorm');
+  res.render('add_dorm', {owner: req.session.owner});
 });
 
 app.post('/add_dorm_info', upload.array('image'), function (req, res) {
@@ -957,7 +989,32 @@ app.get("/search-history", (req, res) => {
   });
 });
 
-//End usecase 1 แจ้งค่าเช่ารายเดือนและบริการอื่นๆ ------------------------------------------------------------------------------------
+// Route: Tenant view self history (Using session tenantID)
+app.get("/tenant-history", (req, res) => {
+  const tenantID = req.session.user?.id; // Get tenantID from session
+
+  if (!tenantID) {
+    return res.send("You must be logged in to view your history.");
+  }
+
+  const tenantQuery = `SELECT * FROM tenant WHERE tenant_ID = ?;`
+  const historyQuery = 
+      `SELECT bill.*, payment.bill_status 
+      FROM bill 
+      LEFT JOIN payment ON bill.bill_id = payment.bill_id
+      WHERE bill.room_id IN (SELECT room_id FROM room WHERE tenant_ID = ?)
+  ;`
+
+  db.get(tenantQuery, [tenantID], (err, tenant) => {
+    if (err) return res.send("Error fetching tenant data.");
+    if (!tenant) return res.send("Tenant not found!");
+
+    db.all(historyQuery, [tenantID], (err, history) => {
+      if (err) return res.send("Error fetching rental history.");
+      res.render("history", { tenant, history , user: req.session.user});
+    });
+  });
+});
 
 app.listen(port, () => {
   console.log(`Starting node.js at port ${port}`);
