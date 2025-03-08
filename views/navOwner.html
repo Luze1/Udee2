@@ -1,0 +1,65 @@
+<div id="sidebar" class="sidebar">
+    <button id="toggle-btn" class="toggle-btn">
+        <i class="bx bx-menu"></i>
+    </button>
+
+    <ul class="nav flex-column">
+        <li class="nav-item">
+            <a href="#" class="nav-link">
+                <i class="bx bx-user"></i>
+                <span>
+                    <%= owner ? owner.username : "Guest" %>
+                </span>
+            </a>
+        </li>
+        <hr>
+
+        <!-- แจ้งค่าบริการ -->
+        <li class="nav-item dropdown">
+            <a href="#" class="nav-link dropdown-toggle" id="billingDropdown" role="button" data-bs-toggle="dropdown"
+                aria-expanded="false">
+                <i class="bx bxs-dollar-circle"></i>
+                <span>บิลค่าเช่า</span>
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="billingDropdown">
+                <li><a class="dropdown-item" href="#">เพิ่มบิล</a></li>
+                <li><a class="dropdown-item" href="#">เช็คสถานะบิล</a></li>
+            </ul>
+        </li>
+        <hr>
+
+        <li class="nav-item"><a href="/add_dorm" class="nav-link"><i class="bx bx-add-to-queue"></i>
+                <span>เพิ่มข้อมูลที่พัก</span></a></li>
+        <hr>
+
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bx bx-wrench"></i> <span>รับแจ้งปัญหา</span></a>
+        </li>
+        <hr>
+
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bx bx-envelope"></i> <span>สัญญาผู้เช่า</span></a>
+        </li>
+        <hr>
+
+        <li class="nav-item"><a href="/search-history" class="nav-link"><i class="bx bx-history"></i>
+                <span>ดูรายงานและประวัติ</span></a></li>
+    </ul>
+</div>
+<script>
+    const sidebar = document.getElementById('sidebar');
+    const toggleBtn = document.getElementById('toggle-btn');
+    const mainContent = document.getElementById('main-content');
+
+    toggleBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+
+        gsap.to("#sidebar", {
+            duration: 0.5,
+            width: sidebar.classList.contains('collapsed') ? "80px" : "220px"
+        });
+
+        gsap.to("#main-content", {
+            duration: 0.5,
+            marginLeft: sidebar.classList.contains('collapsed') ? "80px" : "230px"
+        });
+    });
+</script>
