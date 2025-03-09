@@ -822,23 +822,30 @@ app.post('/add_dorm_info', upload.array('image'), function (req, res) {
         zip_code: formdata.zip_code
       });
 
-      // เพิ่มข้อมูลห้องพัก
-      let roomSql = `INSERT INTO room (room_id, dormitory_id, floor_number) VALUES (?, ?, ?);`;
-      for (let i = 1; i <= formdata.floor_count; i++) {
-        let roomAmount = req.body[`room_amount_floor_${i}`] || 0;
-        
-        for (let j = 1; j <= roomAmount; j++) {
-          let roomId = `R${i}${String(j).padStart(2, '0')}`;
+    // เพิ่มข้อมูลห้องพัก
+    let roomSql = `INSERT INTO room (room_id, dormitory_id, floor_number, room_type_id) VALUES (?, ?, ?, ?);`;
 
-          db.run(roomSql, [roomId, dormitory_id, i], function (err) {
-            if (err) {
-              console.error("Error inserting room data:", err);
-            } else {
-              console.log(`Inserted room: ${roomId} on floor ${i}`);
-            }
-          });
-        }
+    // แปลง dormitory_id เพื่อตัดเลข 0 ข้างหน้า
+    let dormNumber = dormitory_id.replace(/^D0*/, '');
+
+    for (let i = 1; i <= formdata.floor_count; i++) {
+      let roomAmount = req.body[`room_amount_floor_${i}`] || 0;
+
+      for (let j = 1; j <= roomAmount; j++) {
+        let roomId = `${dormNumber}R${i}${String(j).padStart(2, '0')}`; // ใช้ dormNumber ที่ตัดเลข 0 แล้ว
+
+        // สุ่มค่า room_type_id เฉพาะ 2 ห้องแรก
+        let roomTypeId = (j <= 2) ? (Math.random() < 0.5 ? "RT001" : "RT002") : null;
+
+        db.run(roomSql, [roomId, dormitory_id, i, roomTypeId], function (err) {
+          if (err) {
+            console.error("Error inserting room data:", err);
+          } else {
+            console.log(`Inserted room: ${roomId} on floor ${i} in dormitory ${dormitory_id} with room_type_id: ${roomTypeId}`);
+          }
+        });
       }
+    }
 
       // กำหนด path ของรูปธนาคารในรูปแบบ text (ไม่ใช้ __dirname ในการเก็บข้อมูล)
       let bankPicText = "";
