@@ -80,28 +80,6 @@
             </table>
         </div>
     </div>
-
-    <div class="row mt-4" style="margin-left: 7%;margin-right: 7%;">
-        <div class="col-md-12">
-            <h3 class="text-primary" style="text-align: left;font-family: 'Inter', sans-serif;">รายการห้องพัก</h3>
-            <table class="table table-bordered table-light">
-                <thead class="table-primary">
-                    <tr>
-                        <th style="font-family: 'Inter', sans-serif;">ประเภทห้อง</th>
-                        <th style="font-family: 'Inter', sans-serif;">ราคา</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% data.rooms.forEach(room => { %>
-                        <tr>
-                            <td style="font-family: 'Inter', sans-serif;"><%= room.room_type %></td>
-                            <td style="font-family: 'Inter', sans-serif;"><%= room.price %> บาท</td>
-                        </tr>
-                    <% }); %>
-                </tbody>
-            </table>
-        </div>
-    </div>
 </div>
 </div>
   </div>

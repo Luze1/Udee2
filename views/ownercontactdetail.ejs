@@ -52,7 +52,7 @@
             cursor: pointer;
             font-size: 16px;
         }
-        .btn-close {
+        .btn-closed {
             background-color: #ccc;
         }
         .btn-accept {
@@ -134,7 +134,7 @@
     <div class="popup" id="popup">
         <h3>กรอกข้อความตอบกลับ</h3>
         <textarea id="responseText"></textarea>
-        <button class="btn btn-close" onclick="closePopup()">ปิด</button>
+        <button class="btn btn-closed" onclick="closePopup()">ปิด</button>
         <button class="btn btn-accept" onclick="submitResponse('<%= contact.contact_id %>')">รับเรื่อง</button>
 
     </div>

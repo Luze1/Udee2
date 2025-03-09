@@ -16,22 +16,22 @@
         <hr>
 
         <!-- แจ้งค่าบริการ -->
-        <li class="nav-item dropdown">
-            <a href="#" class="nav-link dropdown-toggle" id="billingDropdown" role="button" data-bs-toggle="dropdown"
-                aria-expanded="false">
-                <i class="bx bxs-dollar-circle"></i>
-                <span>บิลค่าเช่า</span>
-            </a>
-            <ul class="dropdown-menu" aria-labelledby="billingDropdown">
-                <li><a class="dropdown-item" href="">เพิ่มบิล</a></li>
-                <li><a class="dropdown-item" href="/BillStatus">เช็คสถานะบิล</a></li>
-            </ul>
+        <li class="nav-item"><a href="/BillStatus" class="nav-link"><i class="bx bxs-dollar-circle"></i> <span>บิลค่าเช่า</span></a>
         </li>
         <hr>
 
-        <li class="nav-item"><a href="/add_dorm" class="nav-link"><i class="bx bx-add-to-queue"></i>
-                <span>เพิ่มข้อมูลที่พัก</span></a></li>
-        <hr>
+        <li class="nav-item dropdown">
+            <a href="#" class="nav-link dropdown-toggle" id="billingDropdown" role="button" data-bs-toggle="dropdown"
+                aria-expanded="false">
+                <i class="bx bx-add-to-queue"></i>
+                <span>จัดการข้อมูลที่พัก</span>
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="billingDropdown">
+                <li><a class="dropdown-item" href="/add_dorm">เพิ่มข้อมูลที่พัก</a></li>
+                <li><a class="dropdown-item" href="#">แก้ไขข้อมูลที่พัก</a></li>
+                <li><a class="dropdown-item" href="#">ลบข้อมูลที่พัก</a></li>
+            </ul>
+        </li>
 
         <li class="nav-item"><a href="/ownercontact" class="nav-link"><i class="bx bx-wrench"></i> <span>รับแจ้งปัญหา</span></a>
         </li>

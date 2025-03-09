@@ -674,3 +674,11 @@ body {
     margin-left: 1%;
     margin-right: 1%;
 }
+
+#main-content {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start; 
+    background-color: #d4e6e6;
+}
