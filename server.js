@@ -818,7 +818,7 @@ app.post('/add_dorm_info', upload.array('image'), function (req, res) {
           bankPicText = "/assets/ttb.png";
           break;
         case "6":
-          bankPicText = "/assets/scb.jpg";
+          bankPicText = "/assets/scb.png";
           break;
         case "7":
           bankPicText = "/assets/krungsri.jpg";
