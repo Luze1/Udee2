@@ -38,10 +38,13 @@
 
         <li class="nav-item"><a href="#" class="nav-link"><i class="bx bx-envelope"></i> <span>สัญญาผู้เช่า</span></a>
         </li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bx bx-user-check"></i> <span>สถานะผู้เช่า</span></a>
+        </li>
         <hr>
 
         <li class="nav-item"><a href="/search-history" class="nav-link"><i class="bx bx-history"></i>
                 <span>ดูรายงานและประวัติ</span></a></li>
+        <li class="nav-item"><a href="/logoutOwner" class="nav-link"><i class="bx bx-log-out"></i> <span>ออกจากระบบ</span></a>
     </ul>
 </div>
 <script>
@@ -50,16 +53,21 @@
     const mainContent = document.getElementById('main-content');
 
     toggleBtn.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-
-        gsap.to("#sidebar", {
-            duration: 0.5,
-            width: sidebar.classList.contains('collapsed') ? "80px" : "220px"
-        });
-
-        gsap.to("#main-content", {
-            duration: 0.5,
-            marginLeft: sidebar.classList.contains('collapsed') ? "80px" : "230px"
-        });
+    sidebar.classList.toggle('collapsed');
+    
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    const mainContentWidth = isCollapsed ? "100%" : "calc(100% - 220px)"; /* Adjust width based on sidebar */
+    
+    gsap.to("#sidebar", {
+        duration: 0.5,
+        width: isCollapsed ? "80px" : "220px"
     });
+
+    gsap.to("#main-content", {
+        duration: 0.5,
+        width: mainContentWidth,
+        marginLeft: isCollapsed ? "80px" : "230px"
+    });
+});
+    
 </script>
