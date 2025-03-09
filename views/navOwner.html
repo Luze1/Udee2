@@ -28,11 +28,11 @@
         </li>
         <hr>
 
-        <li class="nav-item"><a href="/add_dorm" class="nav-link"><i class="bx bx-add-to-queue"></i>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bx bx-add-to-queue"></i>
                 <span>เพิ่มข้อมูลที่พัก</span></a></li>
         <hr>
 
-        <li class="nav-item"><a href="/ownercontact" class="nav-link"><i class="bx bx-wrench"></i> <span>รับแจ้งปัญหา</span></a>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bx bx-wrench"></i> <span>รับแจ้งปัญหา</span></a>
         </li>
         <hr>
 
@@ -53,7 +53,7 @@
     const mainContent = document.getElementById('main-content');
 
     toggleBtn.addEventListener('click', () => {
-    sidebar.classList.toggle('collapsed');
+    sidebar.classList.toggle('collapsed');  
     
     const isCollapsed = sidebar.classList.contains('collapsed');
     const mainContentWidth = isCollapsed ? "100%" : "calc(100% - 220px)"; /* Adjust width based on sidebar */
@@ -69,5 +69,4 @@
         marginLeft: isCollapsed ? "80px" : "230px"
     });
 });
-    
 </script>
