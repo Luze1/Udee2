@@ -332,6 +332,7 @@ app.get("/banks/:bill_id", (req, res) => {
             bank_pic: bankPic
         };
     });
+
       res.render("select_bank", { user: req.session.user, banks: formattedBanks, bill_id: billId });
   });
 });
@@ -936,55 +937,59 @@ app.get("/search-history", (req, res) => {
   const searchQuery = req.query.query;
 
   if (!searchQuery) {
-    return res.render("historyOwner", { tenant: null, history: [], owner: req.session.owner });
+    return res.render("historyOwner", { tenant: null, history: [], owner: req.session.owner, error: null });
   }
 
-  // Query to check tenant data by username, email, or full name
   const tenantQuery = `
       SELECT * FROM tenant 
       WHERE tenant_username = ? OR email = ? OR (firstName || ' ' || lastName) = ?
   `;
 
   db.get(tenantQuery, [searchQuery, searchQuery, searchQuery], (err, tenant) => {
-    if (err) return res.send("Error fetching tenant data.");
+    if (err) return res.render("historyOwner", { tenant: null, history: [], owner: req.session.owner, error: "Error fetching tenant data." });
 
-    // If tenant not found, try to search by room_id
+    const fetchHistory = (tenantData) => {
+      if (!tenantData) return res.render("historyOwner", { tenant: null, history: [], owner: req.session.owner, error: "Tenant or room not found!" });
+
+      const historyQuery = `
+        SELECT bill.*, payment.bill_status 
+        FROM bill 
+        LEFT JOIN payment ON bill.bill_id = payment.bill_id
+        WHERE bill.room_id IN (SELECT room_id FROM room WHERE tenant_ID = ?)
+      `;
+
+      db.all(historyQuery, [tenantData.tenant_ID], (err, history) => {
+        if (err) return res.render("historyOwner", { tenant: tenantData, history: [], owner: req.session.owner, error: "Error fetching rental history." });
+
+        history.forEach(record => {
+          console.log("Bill Status:", record.bill_status);
+          if (record.bill_status === "0") {
+            record.status_text = "❌ ค้างชำระ";
+          } else if (record.bill_status === "1") {
+            record.status_text = "✅ ชำระแล้ว";
+          } else if (record.bill_status === "2") {
+            record.status_text = "⏳ กำลังดำเนินการ";
+          } else {
+            record.status_text = "❓ ไม่ทราบสถานะ";
+          }
+        });
+
+        res.render("historyOwner", { tenant: tenantData, history, owner: req.session.owner, error: null });
+      });
+    };
+
     if (!tenant) {
       const roomQuery = `
-              SELECT tenant.* FROM room 
-              JOIN tenant ON room.tenant_ID = tenant.tenant_ID
-              WHERE room.room_id = ?
-          `;
+        SELECT tenant.* FROM room 
+        JOIN tenant ON room.tenant_ID = tenant.tenant_ID
+        WHERE room.room_id = ?
+      `;
       db.get(roomQuery, [searchQuery], (err, roomTenant) => {
-        if (err) return res.send("Error fetching tenant by room ID.");
-        if (!roomTenant) return res.send("Tenant or room not found!");
-
-        // Proceed to fetch the history of the tenant based on room_id
-        const historyQuery = `
-                  SELECT bill.*, payment.bill_status 
-                  FROM bill 
-                  LEFT JOIN payment ON bill.bill_id = payment.bill_id
-                  WHERE bill.room_id IN (SELECT room_id FROM room WHERE tenant_ID = ?)
-              `;
-
-        db.all(historyQuery, [roomTenant.tenant_ID], (err, history) => {
-          if (err) return res.send("Error fetching rental history.");
-          res.render("historyOwner", { tenant: roomTenant, history, owner: req.session.owner });
-        });
+        if (err) return res.render("historyOwner", { tenant: null, history: [], owner: req.session.owner, error: "Error fetching tenant by room ID." });
+        fetchHistory(roomTenant);
       });
     } else {
-      // Tenant found by username, email, or full name
-      const historyQuery = `
-              SELECT bill.*, payment.bill_status 
-              FROM bill 
-              LEFT JOIN payment ON bill.bill_id = payment.bill_id
-              WHERE bill.room_id IN (SELECT room_id FROM room WHERE tenant_ID = ?)
-          `;
-
-      db.all(historyQuery, [tenant.tenant_ID], (err, history) => {
-        if (err) return res.send("Error fetching rental history.");
-        res.render("historyOwner", { tenant, history, owner: req.session.owner });
-      });
+      fetchHistory(tenant);
     }
   });
 });
