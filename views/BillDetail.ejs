@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ห้อง <%= contract.room_id %></title>
+    <link rel="stylesheet" href="/style/BillDetail.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+    <!-- Boxicons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@2.1.4/css/boxicons.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/style/navOwner.css">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body style="background-color: #d4e6e6;">
+    <%- include('navOwner.html') %>
+    <div id="main-content">
+        <div class="container">
+            <div class="header-section">
+                <h1>ใบแจ้งหนี้</h1>
+                <h2>สถานะใบแจ้งหนี้</h2>
+                <span class="update-status">
+                    อัพเดท 
+                    <span class="status-indicator <%= contract.bill_status ? contract.bill_status.replace(/\s/g, '-').toLowerCase() : 'no-data' %>">
+                        <%= contract.bill_status || 'ไม่มีข้อมูล' %>
+                    </span>
+                </span>
+            </div>
+    
+            <div class="bill-details">
+                <% if (contract && (contract.room_id || contract.bill_status)) { %>
+                    <div class="tenant-info">
+                        <h2 class="main-title">ข้อมูลผู้เช่า:</h2>
+                        <p><strong>ชื่อผู้เช่า:</strong> <%= contract.firstName || 'ไม่ระบุ' %> <%= contract.lastName || '' %></p>
+                        <p><strong>สถานะบิล:</strong> 
+                            <span class="status-indicator <%= contract.bill_status ? contract.bill_status.replace(/\s/g, '-').toLowerCase() : 'no-data' %>">
+                                <%= contract.bill_status || 'ไม่มีข้อมูล' %>
+                            </span>
+                        </p>
+                        <p><strong>เบอร์ติดต่อ:</strong> <%= contract.telephone || 'ไม่มีข้อมูล' %></p>
+                    </div>
+    
+                    <h2 class="main-title">รายการที่ต้องชำระ:</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>รายการ</th>
+                                <th>จำนวนเงิน (บาท)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>ค่าห้อง เดือน <%= billMonth %></td>
+                                <td class="amount"><%= (contract.rent_fee || 0).toLocaleString() %></td>
+                            </tr>
+                            <tr>
+                                <td>ค่าประปา เดือน <%= billMonth %> (<%= waterUnits.toLocaleString() %> หน่วย x <%= (contract.water_per_unit || 0).toLocaleString() %> บาท/หน่วย)</td>
+                                <td class="amount"><%= waterBill.toLocaleString() %></td>
+                            </tr>
+                            <tr>
+                                <td>ค่าไฟ เดือน <%= billMonth %> (<%= electricUnits.toLocaleString() %> หน่วย x <%= (contract.electric_per_unit || 0).toLocaleString() %> บาท/หน่วย)</td>
+                                <td class="amount"><%= electricBill.toLocaleString() %></td>
+                            </tr>
+                            <tr>
+                                <td>ค่าใช้จ่ายเพิ่มเติม</td>
+                                <td class="amount"><%= (additionalExpenses || 0).toLocaleString() %></td>
+                            </tr>
+                            <tr>
+                                <td>ค่าปรับ</td>
+                                <td class="amount"><%= (fine || 0).toLocaleString() %></td>
+                            </tr>
+                            <tr>
+                                <td style="text-align: right;"><strong>รวมยอด</strong></td>
+                                <td class="amount"><strong><%= total.toLocaleString() %></strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+    
+                    <% if (contract.bill_status === 'บิลไม่สมบูรณ์') { %>
+                        <p style="color: red;">* หมายเหตุ: บิลนี้ไม่สมบูรณ์ กรุณาตรวจสอบและกรอกข้อมูลเพิ่มเติม</p>
+                        <form id="billForm">
+                            <label for="water">หน่วยน้ำ:</label>
+                            <input type="number" id="water" name="water" min="0" required>
+                            <label for="electric">หน่วยไฟ:</label>
+                            <input type="number" id="electric" name="electric" min="0" required>
+                            <button type="button" id="saveButton" class="save-button active">
+                                บันทึกค่าน้ำ/ค่าไฟ
+                            </button>
+                        </form>
+                    <% } %>
+    
+                    <!-- แสดงรูปภาพใบเสร็จ -->
+                    <h2 class="main-title">หลักฐานการชำระเงิน:</h2>
+                    <% if (receiptPic) { %>
+                        <img src="data:image/jpeg;base64,<%= receiptPic.toString('base64') %>" alt="Receipt" style="max-width: 300px; max-height: 300px;">
+                    <% } else { %>
+                        <p>ไม่มีรูป</p>
+                    <% } %>
+                <% } else { %>
+                    <p>ไม่พบบิลในห้องนี้</p>
+                <% } %>
+            </div>
+    
+            <% if (contract && (contract.room_id || contract.bill_status)) { %>
+                <div class="button-section">
+                    <% if (contract.bill_status === 'ชำระแล้ว') { %>
+                        <a href="javascript:void(0)" class="action-button" onclick="cancelPayment('<%= contract.room_id %>')">ยกเลิกการชำระ</a>
+                    <% } else if (contract.bill_status === 'รอดำเนินการ') { %>
+                        <a href="javascript:void(0)" class="action-button" onclick="makePayment('<%= contract.room_id %>')">ชำระเงิน</a>
+                    <% } else if (contract.bill_status === 'รอการตรวจสอบ') { %>
+                        <a href="javascript:void(0)" class="action-button" onclick="confirmPayment('<%= contract.room_id %>')">ยืนยันการชำระเงิน</a>
+                    <% } else if (contract.bill_status !== 'บิลไม่สมบูรณ์' && contract.bill_status !== 'รอการชำระเงิน' && contract.bill_status !== 'ไม่มีบิล') { %>
+                        <a href="javascript:void(0)" class="action-button" onclick="makePayment('<%= contract.room_id %>')">ชำระค่าห้อง</a>
+                    <% } %>
+                </div>
+            <% } %>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const saveButton = document.getElementById("saveButton");
+
+            saveButton?.addEventListener("click", function () {
+                const waterUnits = document.getElementById("water").value;
+                const electricUnits = document.getElementById("electric").value;
+
+                if (!waterUnits || !electricUnits) {
+                    alert("กรุณากรอกหน่วยน้ำและหน่วยไฟก่อนบันทึก!");
+                    return;
+                }
+
+                axios.post('/api/save-bill', {
+                    room_id: "<%= contract.room_id %>",
+                    water_units: waterUnits,
+                    electric_units: electricUnits
+                }).then(response => {
+                    alert(response.data.message);
+                    window.location.reload();
+                }).catch(error => {
+                    console.error("❌ เกิดข้อผิดพลาด:", error);
+                    alert("เกิดข้อผิดพลาดในการบันทึกค่าน้ำ/ค่าไฟ");
+                });
+            });
+        });
+
+        function makePayment(roomId) {
+            axios.post('/api/make-payment', { room_id: roomId })
+                .then(response => {
+                    alert(response.data.message);
+                    window.location.reload();
+                })
+                .catch(error => {
+                    console.error("❌ Error:", error);
+                    alert("เกิดข้อผิดพลาดในการชำระเงิน");
+                });
+        }
+
+        function confirmPayment(roomId) {
+            axios.post('/api/make-payment', { room_id: roomId })
+                .then(response => {
+                    alert(response.data.message);
+                    window.location.reload();
+                })
+                .catch(error => {
+                    console.error("❌ Error:", error);
+                    alert("เกิดข้อผิดพลาดในการยืนยันการชำระเงิน");
+                });
+        }
+
+        function cancelPayment(roomId) {
+            axios.post('/api/cancel-payment', { room_id: roomId })
+                .then(response => {
+                    alert(response.data.message);
+                    window.location.reload();
+                })
+                .catch(error => {
+                    console.error("❌ Error:", error);
+                    alert("เกิดข้อผิดพลาดในการยกเลิกการชำระ");
+                });
+        }
+    </script>
+</body>
+</html>

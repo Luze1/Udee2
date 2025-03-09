@@ -253,53 +253,48 @@ app.get('/', (req, res) => {
 });
 
 // API route for user registration
-app.post("/register", (req, res) => {
-  const { username, password, firstName, lastName, telephone, email } =
-    req.body;
+app.post('/register', (req, res) => {
+  const { username, password, firstName, lastName, telephone, email } = req.body;
   let errors = [];
-
-  // ตรวจสอบว่า username, email และ fullname ต้องไม่ซ้ำ และ telephone ต้องเป็นเลข 10 หลัก
+  // ตรวจสอบว่า telephone ต้องเป็นตัวเลข 10 หลัก
   if (!/^[0-9]{10}$/.test(telephone)) {
     errors.push("หมายเลขโทรศัพท์ต้องมี 10 หลัก");
   }
-
-  db.get(
-    "SELECT * FROM tenant WHERE tenant_username = ? OR email = ? OR (firstName = ? AND lastName = ?)",
-    [username, email, firstName, lastName],
-    (err, row) => {
+  if (errors.length > 0) {
+    return res.status(400).json({ status: 'error', message: errors.join(", ") });
+  }
+  // ตรวจสอบความซ้ำซ้อนของ username, email และชื่อเต็ม
+  db.get("SELECT * FROM tenant WHERE tenant_username = ? OR email = ? OR (firstName = ? AND lastName = ?)",
+    [username, email, firstName, lastName], (err, row) => {
       if (err) {
-        console.log(err);
-        errors.push("Database error");
+        console.error(err);
+        return res.status(500).json({ status: 'error', message: 'Database error' });
       }
       if (row) {
-        errors.push("Username, Email หรือ Full Name ถูกใช้ไปแล้ว");
+        return res.status(400).json({ status: 'error', message: 'Username, Email หรือ Full Name ถูกใช้ไปแล้ว' });
       }
-
-      if (errors.length > 0) {
-        return res.send(
-          `<script>alert("${errors.join(
-            "\\n"
-          )}"); window.location.href = "/";</script>`
-        );
-      }
-
-      // ถ้าผ่านเงื่อนไข ให้ INSERT ลงฐานข้อมูล
-      db.run(
-        "INSERT INTO tenant (tenant_username, tenant_password, firstName, lastName, telephone, email) VALUES (?, ?, ?, ?, ?, ?)",
-        [username, password, firstName, lastName, telephone, email],
-        function (err) {
-          if (err) {
-            console.log(err, "cannot insert user");
-            return res.send(
-              '<script>alert("Database error"); window.location.href = "/";</script>'
-            );
-          }
-          console.log("Insert user success");
-          res.send(
-            '<script>alert("User registered successfully"); window.location.href = "/";</script>'
-          );
+      // นับจำนวน tenant ที่มีอยู่เพื่อสร้าง tenant_ID ใหม่
+      db.get("SELECT COUNT(*) AS count FROM tenant", [], (err, result) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ status: 'error', message: 'Database error' });
         }
-      );
+
+        let count = result.count + 1;
+        let tenant_ID = `T${count.toString().padStart(3, '0')}`; // สร้าง ID ในรูปแบบ T001, T002, T003
+        // INSERT ข้อมูลใหม่ลงฐานข้อมูล
+        db.run("INSERT INTO tenant (tenant_ID, tenant_username, tenant_password, firstName, lastName, telephone, email) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [tenant_ID, username, password, firstName, lastName, telephone, email],
+          function (err) {
+            if (err) {
+              console.error(err, 'cannot insert user');
+              return res.status(500).json({ status: 'error', message: 'Database error' });
+            }
+            console.log('Insert user success');
+            res.status(200).json({ status: 'success', message: 'User registered successfully', tenant_ID });
+          }
+        );
+      });
     }
   );
 });
@@ -1040,6 +1035,642 @@ app.get("/tenant-history", (req, res) => {
       res.render("history", { tenant, history, user: req.session.user });
     });    
   });
+});
+
+app.get('/BillStatus', (req, res) => {
+  res.render('BillStatus', {owner:req.session.owner})
+})
+
+app.get('/ReserveRoom', (req, res) => {
+  res.render('ReserveRoom', {owner:req.session.owner})
+})
+
+// ✅ ดึงข้อมูลห้องทั้งหมด
+app.get('/api/rooms', (req, res) => {
+  const { dormitory_id, floor, room_id } = req.query;
+
+  console.log("🔍 ค้นหาด้วยพารามิเตอร์:", { dormitory_id, floor, room_id });
+
+  let query = `
+      SELECT r.room_id, r.dormitory_id, r.tenant_ID, r.floor_number,
+             rt.room_type_name, rt.price, 
+             t.firstName, t.lastName, t.telephone,
+             ts.room_status, ts.tenant_status, ts.bill_status, ts.tenant_picture
+      FROM room r
+      LEFT JOIN room_type rt ON r.room_type_id = rt.room_type_id
+      LEFT JOIN tenant t ON r.tenant_ID = t.tenant_ID
+      LEFT JOIN tenant_status ts ON r.tenant_ID = ts.tenant_ID
+      WHERE 1=1
+  `;
+
+  const params = [];
+
+  // ✅ ถ้าเลือกตึก
+  if (dormitory_id && dormitory_id !== "--เลือกตึก--") {
+      query += ` AND r.dormitory_id = ?`;
+      params.push(dormitory_id);
+  }
+
+  // ✅ ถ้าเลือกชั้น (ใช้ floor_number แทน SUBSTR)
+  if (floor && floor !== "--เลือกชั้น--") {
+      query += ` AND r.floor_number = ?`;
+      params.push(floor);
+  }
+
+  // ✅ ถ้าค้นหาหมายเลขห้อง
+  if (room_id && room_id.trim() !== "") {
+      query += ` AND r.room_id LIKE ?`;
+      params.push(`%${room_id}%`);
+  }
+
+  query += ` ORDER BY r.dormitory_id, r.floor_number, r.room_id`;
+
+  console.log("🔍 Query:", query);
+  console.log("🔍 Params:", params);
+
+  db.all(query, params, (err, rooms) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          res.status(500).json({ error: err.message });
+          return;
+      }
+
+      console.log(`✅ พบ ${rooms.length} ห้อง`);
+
+      let groupedRooms = {};
+      rooms.forEach(room => {
+          let floor = room.floor_number; // ใช้ floor_number แทนการ substring
+          if (!groupedRooms[floor]) {
+              groupedRooms[floor] = [];
+          }
+          groupedRooms[floor].push(room);
+      });
+
+      res.json(groupedRooms);
+  });
+});
+
+// ✅ ดึงรายการตึก
+app.get('/api/dormitories', (req, res) => {
+  const query = `SELECT DISTINCT dormitory_id FROM room ORDER BY dormitory_id;`;
+
+  db.all(query, [], (err, rows) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          res.status(500).json({ error: err.message });
+          return;
+      }
+      res.json(rows);
+  });
+});
+
+// ✅ ดึงรายการชั้นจากห้องทั้งหมด
+app.get('/api/floors', (req, res) => {
+  const { dormitory_id } = req.query;
+  let query = `SELECT DISTINCT floor_number AS floor FROM room`;
+
+  const params = [];
+  if (dormitory_id) {
+      query += ` WHERE dormitory_id = ?`;
+      params.push(dormitory_id);
+  }
+  query += ` ORDER BY floor_number;`;
+
+  db.all(query, params, (err, rows) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          res.status(500).json({ error: err.message });
+          return;
+      }
+      res.json(rows);
+  });
+});
+
+// ✅ เพิ่ม route ใหม่สำหรับดึงห้องว่าง
+app.get('/api/vacant-rooms', (req, res) => {
+  const { dormitory_id, floor } = req.query;
+
+  let query = `
+      SELECT room_id 
+      FROM room 
+      WHERE dormitory_id = ? 
+      AND floor_number = ? 
+      AND tenant_ID IS NULL
+  `;
+
+  const params = [dormitory_id, floor];
+
+  db.all(query, params, (err, rooms) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          res.status(500).json({ error: err.message });
+          return;
+      }
+
+      console.log(`✅ พบ ${rooms.length} ห้องว่าง`);
+      res.json(rooms);
+  });
+});
+
+// ✅ บันทึกข้อมูลผู้เช่าและอัปเดตห้อง
+app.post("/api/assign-room", (req, res) => {
+  const {
+      firstName, lastName, roomId, roomTypeId, // เพิ่ม roomTypeId
+      tenantFirstName, tenantLastName, dormitoryId, floorNumber,
+      userCitizenId, userAddress, contractStartDate, contractEndDate,
+      contractMonth, rentFee, warranty, electricMeterNumber,
+      waterMeterNumber, electricPerUnit, waterPerUnit, extraCondition
+  } = req.body;
+
+  // สร้าง contract_id (ตัวอย่างใช้ timestamp)
+  const contractId = `C${Date.now()}`;
+
+  // ตรวจสอบความถูกต้องของข้อมูลผู้เช่า
+  const query = `
+      SELECT tenant_ID 
+      FROM tenant 
+      WHERE TRIM(LOWER(firstName)) = TRIM(LOWER(?)) 
+      AND TRIM(LOWER(lastName)) = TRIM(LOWER(?))
+  `;
+
+  db.get(query, [firstName, lastName], (err, tenant) => {
+      if (err) {
+          console.error("❌ Database Error:", err.message);
+          return res.status(500).json({ error: "เกิดข้อผิดพลาดในการค้นหาข้อมูล", errorDetail: err.message });
+      }
+
+      if (!tenant) {
+          console.log("ค้นหาด้วย:", { firstName, lastName });
+          return res.status(404).json({ error: "ไม่พบข้อมูลผู้เช่า", message: "กรุณาตรวจสอบชื่อและนามสกุลอีกครั้ง" });
+      }
+
+      // ตรวจสอบสถานะห้อง
+      const checkRoomQuery = `
+          SELECT tenant_ID 
+          FROM room 
+          WHERE room_id = ? AND tenant_ID IS NULL
+      `;
+
+      db.get(checkRoomQuery, [roomId], (err, room) => {
+          if (err) {
+              console.error("❌ Database Error:", err.message);
+              return res.status(500).json({ error: "เกิดข้อผิดพลาดในการตรวจสอบห้อง", errorDetail: err.message });
+          }
+
+          if (!room) {
+              return res.status(400).json({ error: "ห้องไม่ว่าง", message: "กรุณาเลือกห้องว่าง" });
+          }
+
+          // อัปเดตห้องด้วย tenant_ID และ room_type_id
+          const updateRoomQuery = `UPDATE room SET tenant_ID = ?, room_type_id = ? WHERE room_id = ?`;
+          db.run(updateRoomQuery, [tenant.tenant_ID, roomTypeId, roomId], (err) => {
+              if (err) {
+                  console.error("❌ Database Error:", err.message);
+                  return res.status(500).json({ error: "เกิดข้อผิดพลาดในการอัปเดตห้อง", errorDetail: err.message });
+              }
+
+              // อัปเดตสถานะผู้เช่า
+              const updateTenantStatusQuery = `
+                  UPDATE tenant_status 
+                  SET room_status = 'เช่าอยู่', tenant_status = 'ปกติ', bill_status = 'รอชำระ' 
+                  WHERE tenant_ID = ?
+              `;
+              db.run(updateTenantStatusQuery, [tenant.tenant_ID], (err) => {
+                  if (err) {
+                      console.error("❌ Database Error:", err.message);
+                      return res.status(500).json({ error: "เกิดข้อผิดพลาดในการอัปเดตสถานะผู้เช่า", errorDetail: err.message });
+                  }
+
+                  // INSERT ข้อมูลลงในตาราง contract
+                  const insertContractQuery = `
+                      INSERT INTO contract (
+                          contract_id, tenantFirstName, tenantLastName, dormitory_id, floor_number, room_id,
+                          user_citizen_id, user_address, contract_start_date, contract_end_date,
+                          contract_month, rent_fee, warranty, electric_meter_number, water_meter_number,
+                          electric_per_unit, water_per_unit, extra_condition
+                      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `;
+
+                  const values = [
+                      contractId, tenantFirstName, tenantLastName, dormitoryId, floorNumber, roomId,
+                      userCitizenId, userAddress, contractStartDate, contractEndDate, contractMonth,
+                      rentFee, warranty, electricMeterNumber, waterMeterNumber, electricPerUnit,
+                      waterPerUnit, extraCondition // signature เป็น NULL
+                  ];
+
+                  db.run(insertContractQuery, values, function (err) {
+                      if (err) {
+                          console.error("❌ Database Error:", err.message);
+                          return res.status(500).json({ error: "เกิดข้อผิดพลาดในการบันทึกข้อมูลสัญญา", errorDetail: err.message });
+                      }
+
+                      res.json({
+                          success: true,
+                          message: "จัดสรรห้องสำเร็จ และบันทึกข้อมูลสัญญาเรียบร้อยแล้ว",
+                          tenantId: tenant.tenant_ID,
+                          contractId: this.lastID
+                      });
+                  });
+              });
+          });
+      });
+  });
+});
+
+app.post('/api/cancel-payment', (req, res) => {
+  const { room_id } = req.body;
+
+  db.run(`UPDATE payment SET bill_status = '2' WHERE room_id = ?`, [room_id], function (err) {
+      if (err) {
+          console.error("❌ Error canceling payment:", err.message);
+          return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการยกเลิกการชำระ" });
+      }
+      res.json({ success: true, message: "ยกเลิกการชำระสำเร็จ" });
+  });
+});
+
+app.get('/api/bill-status', (req, res) => {
+  const { status } = req.query; // รับ status จาก query parameter
+  let query = `
+      SELECT r.room_id, r.dormitory_id, 
+             COALESCE(p.bill_status, 'ไม่มีบิล') AS bill_status, 
+             r.floor_number AS floor
+      FROM room r
+      LEFT JOIN payment p ON r.room_id = p.room_id
+      WHERE 1=1
+  `;
+
+  const params = [];
+
+  // กรองตามสถานะถ้ามี
+  if (status) {
+      // แปลงสถานะจากข้อความเป็นค่าในฐานข้อมูล
+      let statusValue;
+      switch (status) {
+          case 'ชำระแล้ว': statusValue = '0'; break;
+          case 'รอการตรวจสอบ': statusValue = '1'; break;
+          case 'ค้างชำระ': statusValue = '2'; break;
+          case 'บิลไม่สมบูรณ์': statusValue = '3'; break;
+          default: statusValue = null;
+      }
+      if (statusValue !== null) {
+          query += ` AND COALESCE(p.bill_status, 'ไม่มีบิล') = ?`;
+          params.push(statusValue);
+      }
+  }
+
+  query += ` ORDER BY r.dormitory_id ASC, r.floor_number ASC, r.room_id ASC;`;
+
+  db.all(query, params, (err, rows) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          return res.status(500).json({ error: err.message });
+      }
+
+      const bills = rows.map(row => {
+          let displayStatus;
+          switch (row.bill_status.toString()) {
+              case '0': displayStatus = 'ชำระแล้ว'; break;
+              case '1': displayStatus = 'รอการตรวจสอบ'; break;
+              case '2': displayStatus = 'ค้างชำระ'; break;
+              case '3': displayStatus = 'บิลไม่สมบูรณ์'; break;
+              default: displayStatus = 'ไม่มีบิล';
+          }
+
+          return {
+              room_id: row.room_id,
+              dormitory_id: row.dormitory_id,
+              bill_status: displayStatus,
+              floor: row.floor
+          };
+      });
+
+      console.log("🔍 ข้อมูลที่ส่งกลับ:", bills); // เพิ่ม log เพื่อตรวจสอบ
+      res.json(bills);
+  });
+});
+
+// ✅ ดึงรอบบิลทั้งหมดจากฐานข้อมูล
+app.get('/api/billing-cycles', (req, res) => {
+  db.all("SELECT DISTINCT month FROM bill ORDER BY month ASC;", [], (err, rows) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          return res.status(500).json({ error: err.message });
+      }
+      const months = rows.map(row => row.month);
+      res.json(months);
+  });
+});
+
+// ✅ ดึงบิลตามเดือนและสถานะที่เลือก
+app.get('/api/bills', (req, res) => {
+  const { month, status } = req.query;
+  let query = "SELECT room_id, bill_status FROM bill WHERE month = ?";
+  const params = [month];
+
+  if (status) {
+      query += " AND bill_status = ?";
+      params.push(status);
+  }
+
+  db.all(query, params, (err, rows) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          return res.status(500).json({ error: err.message });
+      }
+      res.json(rows);
+  });
+});
+
+app.post('/api/update-room-status', (req, res) => {
+  const { room_id, tenant_ID } = req.body;
+
+  const query = "UPDATE room SET tenant_ID = ? WHERE room_id = ?";
+
+  db.run(query, [tenant_ID, room_id], function (err) {
+      if (err) {
+          console.error("Error updating room status:", err);
+          res.status(500).send({ success: false, message: "เกิดข้อผิดพลาดในการอัปเดตสถานะห้อง" });
+      } else {
+          res.send({ success: true, message: "อัปเดตสถานะห้องสำเร็จ" });
+      }
+  });
+});
+
+app.post('/api/remove-tenant', (req, res) => {
+  const { room_id } = req.body;
+
+  if (!room_id) {
+      return res.status(400).json({ error: "Room ID is required" });
+  }
+
+  db.serialize(() => {
+      // เริ่ม transaction
+      db.run("BEGIN TRANSACTION");
+
+      // 1. ตรวจสอบว่ามี tenant_ID ใน room หรือไม่
+      db.get("SELECT tenant_ID FROM room WHERE room_id = ?", [room_id], (err, row) => {
+          if (err) {
+              db.run("ROLLBACK");
+              console.error("❌ Error checking room:", err.message);
+              return res.status(500).json({ error: "Failed to check room", details: err.message });
+          }
+          if (!row || !row.tenant_ID) {
+              db.run("ROLLBACK");
+              return res.status(400).json({ error: `ห้อง ${room_id} ไม่มีผู้เช่าอยู่แล้ว` });
+          }
+
+          const tenantId = row.tenant_ID;
+
+          // 2. ลบข้อมูลจากตาราง contract ที่เกี่ยวข้องกับ room_id
+          const deleteContractQuery = "DELETE FROM contract WHERE room_id = ?";
+          db.run(deleteContractQuery, [room_id], (err) => {
+              if (err) {
+                  db.run("ROLLBACK");
+                  console.error("❌ Error deleting contract:", err.message);
+                  return res.status(500).json({ error: "Failed to delete contract", details: err.message });
+              }
+
+              // 3. อัปเดต room โดยตั้ง tenant_ID เป็น NULL
+              const updateRoomQuery = "UPDATE room SET tenant_ID = NULL WHERE room_id = ?";
+              db.run(updateRoomQuery, [room_id], (err) => {
+                  if (err) {
+                      db.run("ROLLBACK");
+                      console.error("❌ Error updating room:", err.message);
+                      return res.status(500).json({ error: "Failed to remove tenant", details: err.message });
+                  }
+
+                  // 4. ลบข้อมูลจาก tenant_status
+                  const deleteTenantStatusQuery = "DELETE FROM tenant_status WHERE tenant_ID = ?";
+                  db.run(deleteTenantStatusQuery, [tenantId], (err) => {
+                      if (err) {
+                          db.run("ROLLBACK");
+                          console.error("❌ Error deleting tenant_status:", err.message);
+                          return res.status(500).json({ error: "Failed to delete tenant status", details: err.message });
+                      }
+
+                      // ถ้าทุกอย่างสำเร็จ Commit transaction
+                      db.run("COMMIT", () => {
+                          console.log(`✅ Tenant removed from room ${room_id}`);
+                          return res.json({ message: `ผู้เช่าในห้อง ${room_id} ถูกลบเรียบร้อยแล้ว พร้อมสัญญาที่เกี่ยวข้อง` });
+                      });
+                  });
+              });
+          });
+      });
+  });
+});
+
+app.get('/bill-detail', (req, res) => {
+  const floor = req.query.floor; // ดึงค่า floor จาก query string
+
+  if (!floor) {
+      return res.status(400).send('Floor is required');
+  }
+
+  // สอบถามฐานข้อมูลเพื่อดึงรายละเอียดบิลของชั้นนั้น
+  const query = `
+      SELECT r.room_id, r.dormitory_id, 
+             COALESCE(ts.bill_status, 'ไม่มีบิล') AS bill_status, 
+             t.firstName, t.lastName, t.telephone
+      FROM room r
+      LEFT JOIN tenant_status ts ON r.tenant_ID = ts.tenant_ID
+      LEFT JOIN tenant t ON r.tenant_ID = t.tenant_ID
+      WHERE SUBSTR(r.room_id, 2, 1) = ?
+      ORDER BY r.room_id ASC;
+  `;
+
+  db.all(query, [floor], (err, bills) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          return res.status(500).send('Error loading bill details');
+      }
+
+      // เรนเดอร์หน้า BillDetail.ejs โดยส่งข้อมูล bills และ floor
+      res.render('BillDetail', { bills: bills, floor: floor });
+  });
+});
+
+app.get('/BillDetail', (req, res) => {
+  const roomId = req.query.room_id;
+  if (!roomId) return res.status(400).send('Room ID is required');
+
+  const query = `
+      SELECT b.rent_fee, b.water_bill, b.electricity_bill, 
+             COALESCE(b.additional_expenses, 0) AS additional_expenses, 
+             COALESCE(b.fine, 0) AS fine,
+             b.month AS bill_month, 
+             c.water_per_unit, c.electric_per_unit, 
+             t.firstName, t.lastName, t.telephone,
+             COALESCE(p.bill_status, 'ไม่มีบิล') AS bill_status,
+             p.receipt_pic
+      FROM bill b
+      LEFT JOIN contract c ON b.contract_id = c.contract_id
+      LEFT JOIN room r ON b.room_id = r.room_id
+      LEFT JOIN tenant t ON r.tenant_ID = t.tenant_ID
+      LEFT JOIN payment p ON r.room_id = p.room_id
+      WHERE b.room_id = ?
+      ORDER BY 
+          CAST(SUBSTR(b.month, -4) AS INTEGER) DESC,  -- จัดเรียงปี (YYYY)
+          CASE 
+              WHEN INSTR(b.month, 'January') > 0 THEN 1
+              WHEN INSTR(b.month, 'February') > 0 THEN 2
+              WHEN INSTR(b.month, 'March') > 0 THEN 3
+              WHEN INSTR(b.month, 'April') > 0 THEN 4
+              WHEN INSTR(b.month, 'May') > 0 THEN 5
+              WHEN INSTR(b.month, 'June') > 0 THEN 6
+              WHEN INSTR(b.month, 'July') > 0 THEN 7
+              WHEN INSTR(b.month, 'August') > 0 THEN 8
+              WHEN INSTR(b.month, 'September') > 0 THEN 9
+              WHEN INSTR(b.month, 'October') > 0 THEN 10
+              WHEN INSTR(b.month, 'November') > 0 THEN 11
+              WHEN INSTR(b.month, 'December') > 0 THEN 12
+              ELSE 0
+          END DESC -- จัดเรียงเดือน
+      LIMIT 1;
+  `;
+
+  db.get(query, [roomId], (err, bill) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          return res.status(500).send('Error loading bill details');
+      }
+
+      if (!bill) {
+          return res.render('BillDetail', {
+              contract: { room_id: roomId, bill_status: 'ไม่มีบิล', firstName: 'ไม่ระบุ', lastName: '', telephone: 'ไม่มีข้อมูล' },
+              waterBill: 0, electricBill: 0, fine: 0, additionalExpenses: 0, total: 0,
+              waterUnits: 0, electricUnits: 0, receiptPic: null,
+              billMonth: 'ไม่พบข้อมูล'
+          });
+      }
+
+      // ✅ คำนวณค่าน้ำค่าไฟ
+      const waterUnits = bill.water_bill || 0;
+      const electricUnits = bill.electricity_bill || 0;
+      const waterBill = (bill.water_per_unit || 10) * waterUnits;
+      const electricBill = (bill.electric_per_unit || 5) * electricUnits;
+      const fine = bill.fine || 0;
+      const additionalExpenses = bill.additional_expenses || 0;
+      const total = (bill.rent_fee || 0) + waterBill + electricBill + additionalExpenses + fine;
+
+      // ✅ แปลงค่าของ bill_status ให้เป็นข้อความที่เข้าใจง่าย
+      let displayBillStatus = 'ไม่มีบิล';
+      if (bill.bill_status !== null && bill.bill_status !== 'ไม่มีบิล') {
+          switch (bill.bill_status.toString()) {
+              case '0':
+                  displayBillStatus = 'ชำระแล้ว';
+                  break;
+              case '1':
+                  displayBillStatus = 'รอดำเนินการ';
+                  break;
+              case '2':
+                  displayBillStatus = 'ค้างชำระ';
+                  break;
+              default:
+                  displayBillStatus = 'ไม่มีบิล';
+          }
+      }
+
+      // ✅ ตรวจสอบว่าใบเสร็จมีหรือไม่
+      if (!bill.receipt_pic && displayBillStatus !== 'ชำระแล้ว') {
+          displayBillStatus = 'รอการชำระเงิน';
+      }
+
+      // ✅ ส่งข้อมูลไปยัง EJS
+      res.render('BillDetail', {
+          contract: { ...bill, bill_status: displayBillStatus , owner:req.session.owner},
+          waterBill,
+          electricBill,
+          fine,
+          additionalExpenses,
+          total,
+          waterUnits,
+          electricUnits,
+          receiptPic: bill.receipt_pic || null,
+          billMonth: bill.bill_month || 'ไม่พบข้อมูล',
+          owner:req.session.owner
+      });
+  });
+});
+
+app.get('/ContractDetail', (req, res) => {
+  const roomId = req.query.room_id;
+
+  if (!roomId) {
+      return res.status(400).send('Room ID is required');
+  }
+
+  const query = `
+      SELECT * 
+      FROM contract 
+      WHERE room_id = ?
+      ORDER BY contract_start_date DESC
+      LIMIT 1
+  `;
+
+  db.get(query, [roomId], (err, contract) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          return res.status(500).send('Error loading contract details');
+      }
+
+      // ส่งข้อมูลไปยัง EJS ไม่ว่าจะมีสัญญาหรือไม่
+      res.render('ContractDetail', {
+          contract: contract || null, // ถ้าไม่มี contract จะส่ง null
+          room_id: roomId,
+          owner:req.session.owner
+          // activePage: 'TenentStatus'
+      });
+  });
+});
+
+app.post('/api/make-payment', (req, res) => {
+  const { room_id } = req.body;
+
+  db.get(`SELECT payment_id FROM payment WHERE room_id = ?`, [room_id], (err, row) => {
+      if (err) {
+          console.error("❌ Error checking payment:", err.message);
+          return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการตรวจสอบข้อมูล" });
+      }
+
+      if (row) {
+          db.run(`UPDATE payment SET bill_status = '0' WHERE room_id = ?`, [room_id], function (err) {
+              if (err) {
+                  console.error("❌ Error updating payment status:", err.message);
+                  return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการชำระเงิน" });
+              }
+              res.json({ success: true, message: "ชำระเงินสำเร็จ" });
+          });
+      } else {
+          const paymentId = `P${Date.now()}`;
+          db.run(`INSERT INTO payment (payment_id, room_id, bill_status, payment_due_date) VALUES (?, ?, '0', DATE('now', '+7 days'))`,
+              [paymentId, room_id], function (err) {
+                  if (err) {
+                      console.error("❌ Error inserting payment:", err.message);
+                      return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการสร้างข้อมูลการชำระ" });
+                  }
+                  res.json({ success: true, message: "ชำระเงินสำเร็จและสร้างข้อมูลใหม่" });
+              });
+      }
+  });
+});
+
+app.get('/api/room-types', (req, res) => {
+  const query = `SELECT room_type_id, room_type_name, price FROM room_type ORDER BY room_type_name;`;
+
+  db.all(query, [], (err, rows) => {
+      if (err) {
+          console.error("❌ Database Query Error:", err.message);
+          res.status(500).json({ error: err.message });
+          return;
+      }
+      res.json(rows);
+  });
+});
+
+app.get('/tenentStatus', (req, res) => {
+  res.render('TenentStatus', { owner: req.session.owner});
 });
 
 // Route:Owner Logout
