@@ -485,7 +485,7 @@ app.get('/owner', (req, res) => {
   if (!req.session.owner) {
     return res.redirect('/owner-login');
   }
-  res.render('owner', { owner: req.session.owner });
+  res.render('TenentStatus', { owner: req.session.owner });
 });
 
 // Route: Logout
@@ -1492,6 +1492,7 @@ app.get('/bill-detail', (req, res) => {
 });
 
 app.get('/BillDetail', (req, res) => {
+  console.log("Session Owner:", req.session.owner); // ✅ Log ค่า owner
   const roomId = req.query.room_id;
   if (!roomId) return res.status(400).send('Room ID is required');
 
@@ -1541,7 +1542,8 @@ app.get('/BillDetail', (req, res) => {
               contract: { room_id: roomId, bill_status: 'ไม่มีบิล', firstName: 'ไม่ระบุ', lastName: '', telephone: 'ไม่มีข้อมูล' },
               waterBill: 0, electricBill: 0, fine: 0, additionalExpenses: 0, total: 0,
               waterUnits: 0, electricUnits: 0, receiptPic: null,
-              billMonth: 'ไม่พบข้อมูล'
+              billMonth: 'ไม่พบข้อมูล',
+              owner: req.session.owner
           });
       }
 
@@ -1579,18 +1581,18 @@ app.get('/BillDetail', (req, res) => {
 
       // ✅ ส่งข้อมูลไปยัง EJS
       res.render('BillDetail', {
-          contract: { ...bill, bill_status: displayBillStatus , owner:req.session.owner},
-          waterBill,
-          electricBill,
-          fine,
-          additionalExpenses,
-          total,
-          waterUnits,
-          electricUnits,
-          receiptPic: bill.receipt_pic || null,
-          billMonth: bill.bill_month || 'ไม่พบข้อมูล',
-          owner:req.session.owner
-      });
+        contract: { ...bill, bill_status: displayBillStatus },
+        waterBill,
+        electricBill,
+        fine,
+        additionalExpenses,
+        total,
+        waterUnits,
+        electricUnits,
+        receiptPic: bill.receipt_pic || null,
+        billMonth: bill.bill_month || 'ไม่พบข้อมูล',
+        owner: req.session.owner
+    });
   });
 });
 
