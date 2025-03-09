@@ -17,6 +17,7 @@ body {
   transition: all 0.3s ease-in-out;
   overflow: auto;
   scrollbar-width: none;
+  
 }
 
 .sidebar.collapsed {
@@ -71,8 +72,8 @@ body {
 /* Adjust Main Content */
 #main-content {
   margin-left: 230px;
-  padding: 20px;
   width: 100%;
+  padding: 20px;
   transition: margin-left 0.3s ease;
 }
 
