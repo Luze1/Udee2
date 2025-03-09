@@ -65,7 +65,7 @@ function displayBillsByDormitory(bills, filter) {
 
             billsInFloor.forEach(bill => {
                 const roomLink = document.createElement("a");
-                roomLink.href = `/incomplete_bill?room_id=${bill.room_id}`;
+                roomLink.href = `/BillDetail?room_id=${bill.room_id}`;
 
                 const roomCard = document.createElement("div");
                 roomCard.classList.add("room-card");
