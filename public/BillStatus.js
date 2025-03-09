@@ -226,3 +226,28 @@ document.addEventListener("DOMContentLoaded", function () {
     loadBillMonths();
 });
 
+function refreshBillStatus() {
+    axios.get('/api/bill-status')
+        .then(response => {
+            console.log("🔄 อัปเดตสถานะบิลใหม่:", response.data);
+            displayBillsByDormitory(response.data);
+        })
+        .catch(error => {
+            console.error("❌ Error:", error);
+        });
+}
+
+function loadBills(statusFilter) {
+    axios.get('/api/bill-status', { params: { status: statusFilter } })
+        .then(response => {
+            console.log("🔍 ผลลัพธ์จาก API:", response.data);
+            displayBillsByDormitory(response.data, statusFilter);
+        })
+        .catch(error => {
+            console.error("❌ Error:", error);
+            const floorsContainer = document.getElementById("floors-container");
+            floorsContainer.innerHTML = "<div class='error-message'>เกิดข้อผิดพลาดในการโหลดข้อมูล</div>";
+        });
+}
+
+

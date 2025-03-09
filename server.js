@@ -51,6 +51,47 @@ app.set("view engine", "ejs");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ✅ ฟังก์ชันสร้าง `bill_id` อัตโนมัติ
+function generateBillID(callback) {
+  db.get("SELECT COUNT(*) AS count FROM bill", [], (err, row) => {
+      if (err) {
+          console.error("❌ Error fetching bill count:", err);
+          return callback(null);
+      }
+      const newBillID = `B${String(row.count + 1).padStart(3, "0")}`;
+      callback(newBillID);
+  });
+}
+
+// ✅ ฟังก์ชันสร้าง `payment_id` อัตโนมัติ
+function generatePaymentID(callback) {
+  db.get("SELECT COUNT(*) AS count FROM payment", [], (err, row) => {
+      if (err) {
+          console.error("❌ Error fetching payment count:", err);
+          return callback(null);
+      }
+      const newPaymentID = `P${String(row.count + 1).padStart(3, "0")}`;
+      callback(newPaymentID);
+  });
+}
+
+function createPayment(bill_id, room_id, tenant_ID, billDueDate, res) {
+  console.log("✅ Creating payment for Bill ID:", bill_id);
+
+  db.run("INSERT INTO payment (payment_id, room_id, tenant_ID, bill_id, bill_status, payment_due_date) VALUES (?, ?, ?, ?, ?, ?)",
+      [`P${Date.now()}`, room_id, tenant_ID, bill_id, 0, billDueDate],
+      function (err) {
+          if (err) {
+              console.error("❌ Error inserting payment:", err);
+              return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการสร้างการชำระเงิน" });
+          }
+
+          console.log("✅ Payment successfully created");
+          res.json({ success: true, message: "ส่งบิลสำเร็จ!" });
+      }
+  );
+}
+
 app.get("/dorm", function (req, res) {
   res.render("detail", { user: req.session.user });
 });
@@ -818,7 +859,7 @@ app.post('/add_dorm_info', upload.array('image'), function (req, res) {
           bankPicText = "/assets/ttb.png";
           break;
         case "6":
-          bankPicText = "/assets/scb.png";
+          bankPicText = "/assets/scb.jpg";
           break;
         case "7":
           bankPicText = "/assets/krungsri.jpg";
@@ -971,28 +1012,172 @@ app.get('/bills/:room_id', async (req, res) => {
   }
 });
 
-// 🟢 API สำหรับเพิ่มรายการเพิ่มเติมลงในบิล
-app.post('/api/add-expense', async (req, res) => {
-  const { detail, amount, bill_id } = req.body;
+app.post('/api/add-expense', (req, res) => {
+  const { room_id, month, amount } = req.body;
 
-  if (!detail || !amount || !bill_id) {
-    return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วน" });
-  }
-
-  try {
-    db.run("UPDATE bill SET additional_expenses = additional_expenses + ? WHERE bill_id = ?",
-      [parseFloat(amount), bill_id],
-      (err) => {
-        if (err) {
-          return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการเพิ่มค่าใช้จ่าย" });
-        }
-        res.json({ success: true, message: "เพิ่มค่าใช้จ่ายสำเร็จ" });
+  db.get("SELECT bill_id FROM bill WHERE room_id = ? AND month = ?", [room_id, month], (err, bill) => {
+      if (err) {
+          console.error("❌ Database error:", err);
+          return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูลใบแจ้งหนี้" });
       }
-    );
-  } catch (error) {
-    console.error("❌ Error:", error);
-    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในเซิร์ฟเวอร์" });
+
+      if (!bill) {
+          console.warn("⚠️ ไม่พบบิล กำลังสร้างบิลใหม่...");
+
+          generateBillID((newBillID) => {
+            db.run("INSERT INTO bill (bill_id, room_id, contract_id, month, rent_fee, water_bill, electricity_bill, additional_expenses, fine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              [newBillID, room_id, contract_id, month, rent_fee, water_bill, electric_bill, additional_expense, 0], function (err) {
+                  if (err) {
+                      console.error("❌ Error inserting new bill:", err);
+                      return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการสร้างบิลใหม่" });
+                  }
+                  createPayment(newBillID, room_id, tenant_ID, billDueDate, res);
+              });
+          });
+      } else {
+          db.run("UPDATE bill SET additional_expenses = additional_expenses + ? WHERE bill_id = ?",
+              [amount, bill.bill_id],
+              function (err) {
+                  if (err) return res.status(500).json({ success: false, message: "ไม่สามารถเพิ่มค่าใช้จ่ายได้" });
+                  res.json({ success: true, message: "เพิ่มค่าใช้จ่ายสำเร็จ!" });
+              });
+      }
+  });
+});
+
+// ✅ API: บันทึกค่าน้ำ/ค่าไฟ
+app.post('/api/record-usage', (req, res) => {
+  const { room_id, month, water_units, electric_units } = req.body;
+
+  db.get("SELECT water_per_unit, electric_per_unit FROM contract WHERE room_id = ?", [room_id], (err, contract) => {
+      if (err || !contract) {
+          return res.status(500).json({ success: false, message: "ไม่พบข้อมูลสัญญาเช่า" });
+      }
+
+      const waterBill = water_units * contract.water_per_unit;
+      const electricBill = electric_units * contract.electric_per_unit;
+
+      generateBillID((newBillID) => {
+          db.get("SELECT * FROM bill WHERE room_id = ? AND month = ?", [room_id, month], (err, bill) => {
+              if (bill) {
+                  db.run("UPDATE bill SET water_bill = ?, electricity_bill = ? WHERE room_id = ? AND month = ?",
+                      [waterBill, electricBill, room_id, month],
+                      function (err) {
+                          if (err) return res.status(500).json({ message: "เกิดข้อผิดพลาดในการอัปเดตค่าน้ำ/ค่าไฟ" });
+                          res.json({ success: true, message: "อัปเดตค่าน้ำ/ค่าไฟสำเร็จ" });
+                      }
+                  );
+              } else {
+                  db.run("INSERT INTO bill (bill_id, room_id, month, water_bill, electricity_bill) VALUES (?, ?, ?, ?, ?)",
+                      [newBillID, room_id, month, waterBill, electricBill],
+                      function (err) {
+                          if (err) return res.status(500).json({ message: "เกิดข้อผิดพลาดในการเพิ่มบิลใหม่" });
+                          res.json({ success: true, message: "เพิ่มบิลและบันทึกค่าน้ำ/ค่าไฟสำเร็จ" });
+                      }
+                  );
+              }
+          });
+      });
+  });
+});
+
+app.post('/api/send-bill', (req, res) => {
+  const { room_id, month, water_units, electric_units, additional_expense } = req.body;
+
+  console.log("✅ Received request to send bill:", { room_id, month, water_units, electric_units, additional_expense });
+
+  if (!room_id || !month) {
+      return res.status(400).json({ success: false, message: "ข้อมูลไม่ครบถ้วน" });
   }
+
+  // ✅ ตรวจสอบและแปลงค่าเดือน (Month Year -> YYYY-MM-DD)
+  const monthParts = month.split(" ");
+  if (monthParts.length !== 2) {
+      console.error("❌ รูปแบบเดือนผิดพลาด:", month);
+      return res.status(400).json({ success: false, message: "รูปแบบเดือนผิดพลาด" });
+  }
+
+  const monthName = monthParts[0]; // เช่น "December"
+  const year = parseInt(monthParts[1]); // เช่น "2025"
+
+  const monthMap = {
+      "January": "01", "February": "02", "March": "03", "April": "04",
+      "May": "05", "June": "06", "July": "07", "August": "08",
+      "September": "09", "October": "10", "November": "11", "December": "12"
+  };
+
+  const monthNum = monthMap[monthName];
+  if (!monthNum) {
+      console.error("❌ ชื่อเดือนผิดพลาด:", monthName);
+      return res.status(400).json({ success: false, message: "ไม่พบชื่อเดือนที่ถูกต้อง" });
+  }
+
+  // ✅ ดึงข้อมูลหอพักเพื่อดู `bill_due_date`
+  db.get(`
+      SELECT c.contract_id, r.tenant_ID, r.dormitory_id, c.rent_fee, c.water_per_unit, c.electric_per_unit, d.bill_due_date
+      FROM room r
+      LEFT JOIN contract c ON r.room_id = c.room_id
+      LEFT JOIN dormitory d ON r.dormitory_id = d.dormitory_id
+      WHERE r.room_id = ?
+  `, [room_id], (err, contract) => {
+      if (err || !contract) {
+          console.error("❌ ไม่พบ contract_id หรือ tenant_ID:", err);
+          return res.status(500).json({ success: false, message: "ไม่พบข้อมูลสัญญาสำหรับห้องนี้" });
+      }
+
+      const { contract_id, tenant_ID, dormitory_id, rent_fee, water_per_unit, electric_per_unit, bill_due_date } = contract;
+      if (!bill_due_date) {
+          console.error("❌ ไม่มีค่ากำหนดชำระใน dormitory");
+          return res.status(500).json({ success: false, message: "ไม่พบข้อมูลวันกำหนดชำระ" });
+      }
+
+      const paymentDueDate = `${year}-${monthNum}-${String(bill_due_date).padStart(2, "0")}`;
+      console.log("✅ คำนวณ Payment Due Date:", paymentDueDate);
+
+      const water_bill = water_units;
+      const electric_bill = electric_units;
+
+      db.get("SELECT bill_id FROM bill WHERE room_id = ? AND month = ?", [room_id, month], (err, bill) => {
+          if (err) {
+              console.error("❌ Error finding bill:", err);
+              return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการค้นหาใบแจ้งหนี้" });
+          }
+
+          if (!bill) {
+              console.warn("⚠️ ไม่พบบิล กำลังสร้างบิลใหม่...");
+
+              generateBillID((newBillID) => {
+                  console.log("🆕 Generating New Bill ID:", newBillID);
+                  db.run("INSERT INTO bill (bill_id, room_id, contract_id, month, rent_fee, water_bill, electricity_bill, additional_expenses, fine) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                      [newBillID, room_id, contract_id, month, rent_fee, water_bill, electric_bill, additional_expense, 0],
+                      function (err) {
+                          if (err) {
+                              console.error("❌ Error inserting new bill:", err);
+                              return res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการสร้างบิลใหม่" });
+                          }
+
+                          console.log("✅ สร้างบิลใหม่สำเร็จ:", newBillID);
+                          createPayment(newBillID, room_id, tenant_ID, paymentDueDate, res);
+                      }
+                  );
+              });
+          } else {
+              console.log("✅ พบ bill_id:", bill.bill_id);
+
+              db.run("UPDATE bill SET water_bill = ?, electricity_bill = ?, additional_expenses = additional_expenses + ? WHERE bill_id = ?",
+                  [water_bill, electric_bill, additional_expense, bill.bill_id],
+                  function (err) {
+                      if (err) {
+                          console.error("❌ Error updating bill:", err);
+                          return res.status(500).json({ success: false, message: "ไม่สามารถอัปเดตบิลได้" });
+                      }
+
+                      createPayment(bill.bill_id, room_id, tenant_ID, paymentDueDate, res);
+                  }
+              );
+          }
+      });
+  });
 });
 
 //End bills usecase 1 แจ้งค่าเช่า----------------------------------------------------------------------------------------------------
@@ -1373,9 +1558,9 @@ app.get('/api/bill-status', (req, res) => {
       // แปลงสถานะจากข้อความเป็นค่าในฐานข้อมูล
       let statusValue;
       switch (status) {
-          case 'ชำระแล้ว': statusValue = '0'; break;
-          case 'รอการตรวจสอบ': statusValue = '1'; break;
-          case 'ค้างชำระ': statusValue = '2'; break;
+          case 'ชำระแล้ว': statusValue = '1'; break;
+          case 'รอการตรวจสอบ': statusValue = '2'; break;
+          case 'ค้างชำระ': statusValue = '0'; break;
           case 'บิลไม่สมบูรณ์': statusValue = '3'; break;
           default: statusValue = null;
       }
@@ -1396,9 +1581,9 @@ app.get('/api/bill-status', (req, res) => {
       const bills = rows.map(row => {
           let displayStatus;
           switch (row.bill_status.toString()) {
-              case '0': displayStatus = 'ชำระแล้ว'; break;
-              case '1': displayStatus = 'รอการตรวจสอบ'; break;
-              case '2': displayStatus = 'ค้างชำระ'; break;
+              case '1': displayStatus = 'ชำระแล้ว'; break;
+              case '2': displayStatus = 'รอการตรวจสอบ'; break;
+              case '0': displayStatus = 'ค้างชำระ'; break;
               case '3': displayStatus = 'บิลไม่สมบูรณ์'; break;
               default: displayStatus = 'ไม่มีบิล';
           }
@@ -1557,13 +1742,82 @@ app.get('/bill-detail', (req, res) => {
   });
 });
 
+app.post('/api/create-bill', async (req, res) => {
+  const { room_id, month, additional_expense, water_units, electric_units } = req.body;
+
+  try {
+      // ตรวจสอบว่ามี bill_id สำหรับ room_id นี้หรือไม่
+      const billQuery = `SELECT bill_id FROM bill WHERE room_id = ? AND month = ?`;
+      const billResult = await db.get(billQuery, [room_id, month]);
+
+      let bill_id;
+
+      if (billResult) {
+          // ถ้ามี bill_id แล้ว ให้อัปเดตข้อมูลบิลแทน
+          bill_id = billResult.bill_id;
+          const updateQuery = `
+              UPDATE bill 
+              SET additional_expenses = additional_expenses + ?
+              WHERE bill_id = ?`;
+          await db.run(updateQuery, [additional_expense, bill_id]);
+      } else {
+          // ถ้ายังไม่มี bill_id ให้สร้าง bill_id ใหม่
+          const countQuery = `SELECT COUNT(*) AS count FROM bill`;
+          const countResult = await db.get(countQuery);
+          const newBillNumber = countResult.count + 1;
+          bill_id = `B${String(newBillNumber).padStart(3, '0')}`;
+
+          // คำนวณค่าน้ำ-ค่าไฟ
+          const contractQuery = `SELECT electric_per_unit, water_per_unit FROM contract WHERE room_id = ?`;
+          const contract = await db.get(contractQuery, [room_id]);
+
+          const water_bill = water_units * contract.water_per_unit;
+          const electricity_bill = electric_units * contract.electric_per_unit;
+
+          // แทรกข้อมูลบิลใหม่
+          const insertBillQuery = `
+              INSERT INTO bill (bill_id, room_id, month, rent_fee, water_bill, electricity_bill, additional_expenses, fine)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+          await db.run(insertBillQuery, [bill_id, room_id, month, 0, water_bill, electricity_bill, additional_expense, 0]);
+
+          // สร้าง payment_id ใหม่
+          const countPaymentQuery = `SELECT COUNT(*) AS count FROM payment`;
+          const countPaymentResult = await db.get(countPaymentQuery);
+          const newPaymentNumber = countPaymentResult.count + 1;
+          const payment_id = `P${String(newPaymentNumber).padStart(3, '0')}`;
+
+          // ดึงวันกำหนดชำระจาก dormitory table
+          const dormQuery = `SELECT bill_due_date FROM dormitory WHERE room_id = ?`;
+          const dormResult = await db.get(dormQuery, [room_id]);
+          const bill_due_date = `2025-${month.split(' ')[1]}-${dormResult.bill_due_date}`;
+
+          // เพิ่มข้อมูล payment
+          const insertPaymentQuery = `
+              INSERT INTO payment (payment_id, room_id, bill_id, bill_status, payment_due_date)
+              VALUES (?, ?, ?, ?, ?)`;
+          await db.run(insertPaymentQuery, [payment_id, room_id, bill_id, '0', bill_due_date]);
+      }
+
+      res.json({ success: true, message: 'บันทึกข้อมูลสำเร็จ', bill_id });
+  } catch (error) {
+      console.error('❌ Error:', error);
+      res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาด', error });
+  }
+});
+
 app.get('/BillDetail', (req, res) => {
   console.log("Session Owner:", req.session.owner); // ✅ Log ค่า owner
-  const roomId = req.query.room_id;
-  if (!roomId) return res.status(400).send('Room ID is required');
+  const roomId = req.query.room_id;  // ✅ รับค่า room_id จาก URL
+  
+  if (!roomId) {
+      console.error("❌ Room ID is missing");
+      return res.status(400).send('Room ID is required');  // ✅ แสดง error ถ้าไม่มี room_id
+  }
+
+  console.log("✅ Received Room ID:", roomId);  // ✅ Log ค่า room_id เพื่อตรวจสอบว่ามีค่าถูกส่งมาหรือไม่
 
   const query = `
-      SELECT b.rent_fee, b.water_bill, b.electricity_bill, 
+      SELECT b.bill_id, b.contract_id, b.rent_fee, b.water_bill, b.electricity_bill, 
              COALESCE(b.additional_expenses, 0) AS additional_expenses, 
              COALESCE(b.fine, 0) AS fine,
              b.month AS bill_month, 
@@ -1578,7 +1832,7 @@ app.get('/BillDetail', (req, res) => {
       LEFT JOIN payment p ON r.room_id = p.room_id
       WHERE b.room_id = ?
       ORDER BY 
-          CAST(SUBSTR(b.month, -4) AS INTEGER) DESC,  -- จัดเรียงปี (YYYY)
+          CAST(SUBSTR(b.month, -4) AS INTEGER) DESC,
           CASE 
               WHEN INSTR(b.month, 'January') > 0 THEN 1
               WHEN INSTR(b.month, 'February') > 0 THEN 2
@@ -1593,7 +1847,7 @@ app.get('/BillDetail', (req, res) => {
               WHEN INSTR(b.month, 'November') > 0 THEN 11
               WHEN INSTR(b.month, 'December') > 0 THEN 12
               ELSE 0
-          END DESC -- จัดเรียงเดือน
+          END DESC
       LIMIT 1;
   `;
 
@@ -1604,8 +1858,11 @@ app.get('/BillDetail', (req, res) => {
       }
 
       if (!bill) {
+          console.warn("⚠️ ไม่พบข้อมูลบิลของห้อง:", roomId);
           return res.render('BillDetail', {
+              room_id: roomId, 
               contract: { room_id: roomId, bill_status: 'ไม่มีบิล', firstName: 'ไม่ระบุ', lastName: '', telephone: 'ไม่มีข้อมูล' },
+              bill_id: null, contract_id: null,
               waterBill: 0, electricBill: 0, fine: 0, additionalExpenses: 0, total: 0,
               waterUnits: 0, electricUnits: 0, receiptPic: null,
               billMonth: 'ไม่พบข้อมูล',
@@ -1613,52 +1870,26 @@ app.get('/BillDetail', (req, res) => {
           });
       }
 
-      // ✅ คำนวณค่าน้ำค่าไฟ
-      const waterUnits = bill.water_bill || 0;
-      const electricUnits = bill.electricity_bill || 0;
-      const waterBill = (bill.water_per_unit || 10) * waterUnits;
-      const electricBill = (bill.electric_per_unit || 5) * electricUnits;
-      const fine = bill.fine || 0;
-      const additionalExpenses = bill.additional_expenses || 0;
-      const total = (bill.rent_fee || 0) + waterBill + electricBill + additionalExpenses + fine;
+      console.log("✅ Loaded Bill Details:", bill);
 
-      // ✅ แปลงค่าของ bill_status ให้เป็นข้อความที่เข้าใจง่าย
-      let displayBillStatus = 'ไม่มีบิล';
-      if (bill.bill_status !== null && bill.bill_status !== 'ไม่มีบิล') {
-          switch (bill.bill_status.toString()) {
-              case '0':
-                  displayBillStatus = 'ชำระแล้ว';
-                  break;
-              case '1':
-                  displayBillStatus = 'รอดำเนินการ';
-                  break;
-              case '2':
-                  displayBillStatus = 'ค้างชำระ';
-                  break;
-              default:
-                  displayBillStatus = 'ไม่มีบิล';
-          }
-      }
-
-      // ✅ ตรวจสอบว่าใบเสร็จมีหรือไม่
-      if (!bill.receipt_pic && displayBillStatus !== 'ชำระแล้ว') {
-          displayBillStatus = 'รอการชำระเงิน';
-      }
-
-      // ✅ ส่งข้อมูลไปยัง EJS
       res.render('BillDetail', {
-        contract: { ...bill, bill_status: displayBillStatus },
-        waterBill,
-        electricBill,
-        fine,
-        additionalExpenses,
-        total,
-        waterUnits,
-        electricUnits,
-        receiptPic: bill.receipt_pic || null,
-        billMonth: bill.bill_month || 'ไม่พบข้อมูล',
-        owner: req.session.owner
-    });
+          room_id: roomId,
+          contract: { ...bill, bill_status: bill.bill_status },
+          bill_id: bill.bill_id,
+          contract_id: bill.contract_id,
+          waterBill: (bill.water_per_unit || 10) * (bill.water_bill || 0),
+          electricBill: (bill.electric_per_unit || 5) * (bill.electricity_bill || 0),
+          fine: bill.fine || 0,
+          additionalExpenses: bill.additional_expenses || 0,
+          total: (bill.rent_fee || 0) + (bill.water_per_unit || 10) * (bill.water_bill || 0) + 
+                 (bill.electric_per_unit || 5) * (bill.electricity_bill || 0) + 
+                 bill.additional_expenses + bill.fine,
+          waterUnits: bill.water_bill || 0,
+          electricUnits: bill.electricity_bill || 0,
+          receiptPic: bill.receipt_pic || null,
+          billMonth: bill.bill_month || 'ไม่พบข้อมูล',
+          owner: req.session.owner
+      });
   });
 });
 
