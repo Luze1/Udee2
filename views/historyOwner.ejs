@@ -13,6 +13,8 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/style/navOwner.css">
+    <!-- Sweer Alert -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         body {
             background-color: #f5f5f5;
@@ -57,11 +59,14 @@
             margin-top: 20px;
         }
 
-        table, th, td {
+        table,
+        th,
+        td {
             border: 1px solid #ddd;
         }
 
-        th, td {
+        th,
+        td {
             padding: 10px;
             text-align: center;
         }
@@ -80,54 +85,86 @@
 <body>
     <%- include('navOwner.html') %>
 
-    <!-- Main Content -->
-    <div id="main-content">
-        <div class="container text-center pt-2 mt-5">
-            <h2>Search Tenant History</h2>
-        <form action="/search-history" method="GET">
-            <input type="text" name="query" placeholder="Enter Username, Email, or Full Name" required>
-            <button type="submit">Search</button>
-        </form>
+        <!-- Main Content -->
+        <div id="main-content">
+            <div class="container text-center pt-2 mt-5">
+                <h2>ค้นหาประวัติ</h2>
+                <form action="/search-history" method="GET">
+                    <input type="text" name="query" placeholder="ใส่Username หรือ email หรือ ชื่อ+นามสกุล" required>
+                    <button type="submit">Search</button>
+                </form>
 
-        <% if (tenant) { %>
-            <h3>Tenant: <%= tenant.firstName %> <%= tenant.lastName %></h3>
-            <p>Email: <%= tenant.email %></p>
-            <p>Phone: <%= tenant.telephone %></p>
-            <h3>Rental History</h3>
-            <table border="1" class="table table-striped">
-                <tr>
-                    <th>Room</th>
-                    <th>Month</th>
-                    <th>Rent Fee</th>
-                    <th>Water Bill</th>
-                    <th>Electricity Bill</th>
-                    <th>Other Charges</th>
-                    <th>Status</th>
-                </tr>
-                <% history.forEach(record => { %>
-                <tr>
-                    <td><%= record.room_id %></td>
-                    <td><%= record.month %></td>
-                    <td><%= record.rent_fee %></td>
-                    <td><%= record.water_bill %></td>
-                    <td><%= record.electricity_bill %></td>
-                    <td><%= record.additional_expenses %></td>
-                    <td><%= record.status %></td>
-                </tr>
-                <% }); %>
-            </table>
-        <% } %>
+                <% if (tenant) { %>
+                    <h3>ชื่อผู้เช่า: <%= tenant.firstName %>
+                            <%= tenant.lastName %>
+                    </h3>
+                    <p>อีเมล: <%= tenant.email %>
+                    </p>
+                    <p>เบอร์โทรติดต่อ: <%= tenant.telephone %>
+                    </p>
+                    <h3>ประวัติค่าเช่า</h3>
+                    <table border="1" class="table table-striped">
+                        <tr class="table-dark">
+                            <th>เลขห้อง</th>
+                            <th>เดือน</th>
+                            <th>ค่าเช่า</th>
+                            <th>บิลค่าน้ำ</th>
+                            <th>บิลค่าไฟ</th>
+                            <th>ค่าบริการอื่นๆ</th>
+                            <th>สถานะการจ่ายบิล</th>
+                        </tr>
+                        <% history.forEach(record=> { %>
+                            <tr class="table-secondary">
+                                <td>
+                                    <%= record.room_id %>
+                                </td>
+                                <td>
+                                    <%= record.month %>
+                                </td>
+                                <td>
+                                    <%= record.rent_fee %>
+                                </td>
+                                <td>
+                                    <%= record.water_bill %>
+                                </td>
+                                <td>
+                                    <%= record.electricity_bill %>
+                                </td>
+                                <td>
+                                    <%= record.additional_expenses %>
+                                </td>
+                                <td>
+                                    <%= record.status_text%>
+                                </td>
+                            </tr>
+                            <% }); %>
+                    </table>
+                    <% } %>
+            </div>
         </div>
-    </div>
 
-    <!-- GSAP -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <!-- Bootstrap JS and Popper.js -->
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+        <!-- GSAP -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+        <!-- Bootstrap JS and Popper.js -->
+        <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
 
-    <!-- Custom JS -->
-    <script src="/views/navOwner.js"></script>
+        <!-- Custom JS -->
+        <script src="/views/navOwner.js"></script>
 </body>
+<script>
+    let errorMessage = "<%= error ? error : '' %>";
+
+    // ถ้ามี error ให้แสดง Swal แจ้งเตือน
+    if (errorMessage) {
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด!',
+            text: errorMessage,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'ตกลง'
+        });
+    }
+</script>
 
 </html>

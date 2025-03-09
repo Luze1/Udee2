@@ -6,6 +6,7 @@ const bodyParser = require("body-parser");
 const session = require("express-session");
 const multer = require("multer");
 const storage = multer.memoryStorage(); // เก็บไฟล์ในหน่วยความจำ (Buffer)
+const { v4: uuidv4 } = require('uuid');
 const upload = multer({
   storage: storage,
   limits: { files: 5 }, // จำกัดจำนวนไฟล์ที่สามารถอัปโหลดได้สูงสุด 5 ไฟล์
@@ -17,6 +18,7 @@ const upload = multer({
     }
   }
 });
+const uploadSingle = upload.single("receipt");
 
 // Creating the Express server
 const app = express();
@@ -365,27 +367,29 @@ app.get("/pay/:bank_account_number/:bill_id", (req, res) => {
 
 const fs = require("fs");
 
-app.post("/confirm-payment", upload.single("receipt"), (req, res) => {
+app.post("/confirm-payment", uploadSingle, (req, res) => {
   if (!req.session.user) {
-    return res.redirect("/"); // ถ้าไม่ได้ login ให้กลับไปหน้าแรก
+      return res.redirect("/"); 
   }
 
   const { bill_id, bank_account_number } = req.body;
 
-  // อ่านไฟล์เป็น Buffer ถ้ามีการอัปโหลด
-  const receiptBlob = req.file ? fs.readFileSync(req.file.path) : null;
+  console.log("Received file:", req.file); // Debugging
 
-  const query = `
-    UPDATE payment SET bill_status = 2, receipt_pic = ? WHERE bill_id = ?;
-  `;
+  let receiptBlob = null;
+  if (req.file) {
+      receiptBlob = req.file.buffer; 
+  }
+
+  const query = `UPDATE payment SET bill_status = 2, receipt_pic = ? WHERE bill_id = ?;`;
 
   db.run(query, [receiptBlob, bill_id], (err) => {
-    if (err) {
-      console.error("SQL Error:", err.message);
-      return res.status(500).send("เกิดข้อผิดพลาดในการบันทึกการชำระเงิน");
-    }
+      if (err) {
+          console.error("SQL Error:", err.message);
+          return res.status(500).send("เกิดข้อผิดพลาดในการบันทึกการชำระเงิน");
+      }
 
-    res.redirect("/bill");
+      res.redirect("/bill");
   });
 });
 
@@ -809,7 +813,7 @@ app.post('/add_dorm_info', upload.array('image'), function (req, res) {
         const facilityValues = [];
 
         facilities.forEach(facility => {
-          const rawUUID = uuid.v4().replace(/-/g, '');
+          const rawUUID = uuidv4().replace(/-/g, '');
           const facilityID = `FAC-${rawUUID.slice(0, 8)}`;
           facilityInserts.push(`(?, ?, ?)`);
           facilityValues.push(facilityID, dormitory_id, facility);
