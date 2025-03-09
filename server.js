@@ -882,12 +882,12 @@ app.post('/add_dorm_info', upload.array('image'), function (req, res) {
                     }
                     pending--;
                     if (pending === 0) {
-                      res.redirect('/dorm');
+                      res.redirect('/add_dorm');
                     }
                   });
                 });
               } else {
-                res.redirect('/dorm');
+                res.redirect('/add_dorm');
               }
             });
           } else {
@@ -903,12 +903,12 @@ app.post('/add_dorm_info', upload.array('image'), function (req, res) {
                   }
                   pending--;
                   if (pending === 0) {
-                    res.redirect('/dorm');
+                    res.redirect('/add_dorm');
                   }
                 });
               });
             } else {
-              res.redirect('/dorm');
+              res.redirect('/add_dorm');
             }
           }
         }
