@@ -803,28 +803,28 @@ app.post('/add_dorm_info', upload.array('image'), function (req, res) {
       let bankPicText = "";
       switch (formdata.bank_name) {
         case "1":
-          bankPicText = "assets/prompt_pay.png";
+          bankPicText = "/assets/prompt_pay.png";
           break;
         case "2":
-          bankPicText = "assets/bangkok.jpg";
+          bankPicText = "/assets/bangkok.jpg";
           break;
         case "3":
-          bankPicText = "assets/kbank.jpg";
+          bankPicText = "/assets/kbank.jpg";
           break;
         case "4":
-          bankPicText = "assets/krungthai.png";
+          bankPicText = "/assets/krungthai.png";
           break;
         case "5":
-          bankPicText = "assets/ttb.png";
+          bankPicText = "/assets/ttb.png";
           break;
         case "6":
-          bankPicText = "assets/scb.png";
+          bankPicText = "/assets/scb.png";
           break;
         case "7":
-          bankPicText = "assets/krungsri.jpg";
+          bankPicText = "/assets/krungsri.jpg";
           break;
         case "8":
-          bankPicText = "assets/aomsin.jpg";
+          bankPicText = "/assets/aomsin.jpg";
           break;
         default:
           bankPicText = ""; // กรณีไม่ได้เลือกธนาคารที่ถูกต้อง
