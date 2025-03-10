@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tenant Contact Form</title>
     <link rel="stylesheet" href="/style.css">
-</head>
-<body>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -71,24 +69,52 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
         }
 
-        button:hover {
+        .button-group {
+             display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .back-button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 10px; /* ระยะห่างระหว่างปุ่มย้อนกลับและปุ่มส่ง */
+        }
+
+        .back-button:hover {
+            background-color: #5a6268;
+        }
+
+        .submit-button:hover {
             background-color: #0056b3;
         }
     </style>
-    
-    <div class="container">
-        <h2>Submit a Contact Request</h2>
+</head>
+<body style="background-color: #DAE7E7;">
+    <img src="/assets/apartment 1.svg" alt="apartment" draggable="false"
+            style="position: fixed; right: 20px; bottom: 20px;">
+    <div class="container"><body style="background-color: #DAE7E7;">
+        <h2>ส่งฟอร์มติดต่อไปยังเจ้าของหอพัก</h2>
         <form action="/submit-contact" method="POST" enctype="multipart/form-data">
-            <label for="topic">Topic:</label>
+            <label for="topic">หัวข้อ:</label>
             <input type="text" id="topic" name="topic" required><br>
             
-            <label for="description">Description:</label>
+            <label for="description">รายละเอียดการติดต่อ:</label>
             <textarea id="description" name="description" required></textarea><br>
             
-            <label for="picture">Upload Picture:</label>
+            <label for="picture">อัพโหลดรูปภาพ (หากมี):</label>
             <input type="file" id="picture" name="picture" accept="image/*"><br>
             
-            <button type="submit">Submit</button>
+            <div class="button-group">
+                <button type="button" class="back-button" onclick="window.history.back()">ย้อนกลับ</button>
+                <button type="submit" class="submit-button">ส่ง</button>
+            </div>
+            
         </form>
     </div>
 </body>
