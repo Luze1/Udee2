@@ -1363,17 +1363,19 @@ app.get('/api/rooms', (req, res) => {
 
 // ✅ ดึงรายการตึก
 app.get('/api/dormitories', (req, res) => {
-  const query = `SELECT DISTINCT dormitory_id FROM room ORDER BY dormitory_id;`;
+    const query = "SELECT dormitory_id, dormitory_name FROM dormitory";
 
-  db.all(query, [], (err, rows) => {
-      if (err) {
-          console.error("❌ Database Query Error:", err.message);
-          res.status(500).json({ error: err.message });
-          return;
-      }
-      res.json(rows);
-  });
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error("❌ Error fetching dormitories:", err);
+            res.status(500).json({ error: "Database error" });
+            return;
+        }
+        console.log("📡 Sending dormitories:", rows); // ✅ Debugging
+        res.json(rows);
+    });
 });
+
 
 // ✅ ดึงรายการชั้นจากห้องทั้งหมด
 app.get('/api/floors', (req, res) => {
